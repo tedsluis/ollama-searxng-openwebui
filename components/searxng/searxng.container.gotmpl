@@ -1,0 +1,18 @@
+[Unit]
+Description=SearXNG Metasearch Engine (Quadlet via Materia)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/searxng/searxng:{{ .containerTag }}
+ContainerName=searxng
+PublishPort=127.0.0.1:{{ .port }}:8080
+Volume={{ m_dataDir "searxng" }}/settings.yml:/etc/searxng/settings.yml:ro,Z
+Environment=SEARXNG_BASE_URL=http://127.0.0.1:{{ .port }}/
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target default.target

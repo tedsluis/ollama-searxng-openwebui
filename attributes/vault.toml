@@ -1,0 +1,18 @@
+[global]
+cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
+
+[components.ollama]
+containerTag = "latest"
+modelsPath = "/usr/share/ollama/.ollama"
+gpuOverhead = "134217728"
+keepAlive = "15m"
+
+[components.searxng]
+containerTag = "latest"
+port = "8112"
+secretKey = "fdj236720n2z39vbru372v28fdk2jm2us"
+
+[components.open-webui]
+containerTag = "main"
+port = "8080"
+dataPath = "/opt/open-webui"

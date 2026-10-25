@@ -1,0 +1,21 @@
+[Unit]
+Description=Open WebUI (Quadlet via Materia)
+After=network-online.target ollama.service searxng.service
+Wants=network-online.target ollama.service searxng.service
+
+[Container]
+Image=ghcr.io/open-webui/open-webui:{{ .containerTag }}
+ContainerName=open-webui
+Network=host
+UserNS=keep-id
+Volume={{ .dataPath }}:/app/backend/data:Z
+EnvironmentFile={{ m_dataDir "open-webui" }}/open-webui.env
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=300
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target default.target
+

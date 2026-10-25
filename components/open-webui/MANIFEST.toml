@@ -1,0 +1,8 @@
+[Defaults]
+containerTag = "main"
+port = "8080"
+dataPath = "/opt/open-webui"
+
+[[Services]]
+Service = "open-webui.service"
+RestartedBy = ["open-webui.env"]
