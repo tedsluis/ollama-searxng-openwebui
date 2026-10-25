@@ -1,5 +1,4 @@
 [Defaults]
-containerTag = "latest"
 port = "8112"
 
 [[Services]]

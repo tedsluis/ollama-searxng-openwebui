@@ -2,17 +2,28 @@
 cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
 
 [components.ollama]
-containerTag = "latest"
+# renovate: datasource=docker depName=docker.io/ollama/ollama versioning=semver
+containerTag = "0.40.10"
 modelsPath = "/usr/share/ollama/.ollama"
 gpuOverhead = "134217728"
 keepAlive = "15m"
 cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
 
 [components.searxng]
-containerTag = "latest"
+# renovate: datasource=docker depName=docker.io/searxng/searxng versioning=loose extractVersion=^(?<version>\d{4}\.\d{1,2}\.\d{1,2}-[0-9a-f]+)$
+containerTag = "2026.9.7-3e454637f"
 port = "8112"
 
 [components.open-webui]
-containerTag = "main"
+# renovate: datasource=docker depName=ghcr.io/open-webui/open-webui versioning=semver
+containerTag = "v0.12.2"
 port = "8080"
 dataPath = "/opt/open-webui"
+
+
+[components.renovate]
+# renovate: datasource=docker depName=ghcr.io/renovatebot/renovate versioning=semver
+containerTag = "44.181.1"
+githubRepo = "tedsluis/ollama-searxng-openwebui"
+
+

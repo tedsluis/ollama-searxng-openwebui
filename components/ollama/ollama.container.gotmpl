@@ -18,6 +18,12 @@ Environment=OLLAMA_NUM_PARALLEL=1
 Environment=OLLAMA_MAX_LOADED_MODELS=1
 Environment=OLLAMA_KEEP_ALIVE={{ .keepAlive }}
 PodmanArgs=--cpuset-cpus={{ .cpuPinList }}
+HealthCmd=/bin/ollama list || exit 1
+HealthInterval=15s
+HealthRetries=3
+HealthStartPeriod=30s
+HealthOnFailure=kill
+Notify=healthy
 
 [Service]
 TimeoutStartSec=900

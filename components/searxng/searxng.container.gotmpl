@@ -9,6 +9,12 @@ ContainerName=searxng
 PublishPort=127.0.0.1:{{ .port }}:8080
 Volume={{ m_dataDir "searxng" }}/settings.yml:/etc/searxng/settings.yml:ro,Z
 Environment=SEARXNG_BASE_URL=http://127.0.0.1:{{ .port }}/
+HealthCmd=wget -q --spider http://127.0.0.1:8080/ || exit 1
+HealthInterval=15s
+HealthRetries=3
+HealthStartPeriod=20s
+HealthOnFailure=kill
+Notify=healthy
 
 [Service]
 TimeoutStartSec=300

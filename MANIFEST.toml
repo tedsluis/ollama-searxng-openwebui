@@ -1,2 +1,2 @@
 [Hosts.fedora]
-Components = ["ollama", "searxng", "open-webui"]
+Components = ["ollama", "searxng", "open-webui", "renovate"]

@@ -1,5 +1,4 @@
 [Defaults]
-containerTag = "main"
 port = "8080"
 dataPath = "/opt/open-webui"
 

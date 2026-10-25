@@ -1,5 +1,4 @@
 [Defaults]
-containerTag = "latest"
 modelsPath = "/usr/share/ollama/.ollama"
 gpuOverhead = "134217728"
 keepAlive = "15m"

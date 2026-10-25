@@ -10,8 +10,15 @@ Network=host
 UserNS=keep-id
 Volume={{ .dataPath }}:/app/backend/data:Z
 EnvironmentFile={{ m_dataDir "open-webui" }}/open-webui.env
+HealthCmd=curl -fsS http://127.0.0.1:{{ .port }}/health || exit 1
+HealthInterval=15s
+HealthRetries=3
+HealthStartPeriod=60s
+HealthOnFailure=kill
+Notify=healthy
 
 [Service]
+ExecStartPre=-/usr/bin/cp -a /opt/open-webui/webui.db /opt/open-webui/webui.db.pre-update.bak
 Restart=on-failure
 TimeoutStartSec=300
 RestartSec=10
