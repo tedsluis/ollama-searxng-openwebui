@@ -11,6 +11,7 @@ Volume={{ m_dataDir "searxng" }}/settings.yml:/etc/searxng/settings.yml:ro,Z
 Environment=SEARXNG_BASE_URL=http://127.0.0.1:{{ .port }}/
 
 [Service]
+TimeoutStartSec=300
 Restart=always
 RestartSec=5
 
