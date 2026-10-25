@@ -3,7 +3,7 @@ cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
 
 [components.ollama]
 # renovate: datasource=docker depName=docker.io/ollama/ollama versioning=semver
-containerTag = "0.40.10"
+containerTag = "0.40.11"
 modelsPath = "/usr/share/ollama/.ollama"
 gpuOverhead = "134217728"
 keepAlive = "15m"
