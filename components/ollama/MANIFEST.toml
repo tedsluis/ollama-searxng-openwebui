@@ -3,6 +3,7 @@ containerTag = "latest"
 modelsPath = "/usr/share/ollama/.ollama"
 gpuOverhead = "134217728"
 keepAlive = "15m"
+cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
 
 [[Services]]
 Service = "ollama.service"
