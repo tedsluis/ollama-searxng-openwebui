@@ -10,20 +10,17 @@ keepAlive = "15m"
 cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
 
 [components.searxng]
-# renovate: datasource=docker depName=docker.io/searxng/searxng versioning=loose extractVersion=^(?<version>\d{4}\.\d{1,2}\.\d{1,2}-[0-9a-f]+)$
+# renovate: datasource=docker depName=docker.io/searxng/searxng versioning=regex:^(?<major>\d{4})\.(?<minor>\d{1,2})\.(?<patch>\d{1,2})-(?<build>[0-9a-f]+)$
 containerTag = "2026.9.7-3e454637f"
 port = "8112"
 
 [components.open-webui]
 # renovate: datasource=docker depName=ghcr.io/open-webui/open-webui versioning=semver
-containerTag = "v0.12.2"
+containerTag = "v0.12.4"
 port = "8080"
 dataPath = "/opt/open-webui"
-
 
 [components.renovate]
 # renovate: datasource=docker depName=ghcr.io/renovatebot/renovate versioning=semver
 containerTag = "44.181.1"
 githubRepo = "tedsluis/ollama-searxng-openwebui"
-
-
