@@ -16,7 +16,7 @@ port = "8112"
 
 [components.open-webui]
 # renovate: datasource=docker depName=ghcr.io/open-webui/open-webui versioning=semver
-containerTag = "v0.12.4"
+containerTag = "v0.12.5"
 port = "8080"
 dataPath = "/opt/open-webui"
 
