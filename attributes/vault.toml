@@ -11,7 +11,7 @@ cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
 
 [components.searxng]
 # renovate: datasource=docker depName=docker.io/searxng/searxng versioning=regex:^(?<major>\d{4})\.(?<minor>\d{1,2})\.(?<patch>\d{1,2})-(?<build>[0-9a-f]+)$
-containerTag = "2026.10.29-cff884f98"
+containerTag = "2026.10.30-1cd13d98d"
 port = "8112"
 
 [components.open-webui]
