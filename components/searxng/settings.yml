@@ -5,6 +5,6 @@ search:
     - html
     - json
 server:
-  secret_key: "fdj236720n2z39vbru372v28fdk2jm2us"
+  # secret_key komt uit de Podman secret 'searxng_secret' (env SEARXNG_SECRET)
   limiter: false
   image_proxy: true

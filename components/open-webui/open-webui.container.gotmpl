@@ -11,6 +11,7 @@ Network=host
 UserNS=keep-id
 Volume={{ .dataPath }}:/app/backend/data:Z
 EnvironmentFile={{ m_dataDir "open-webui" }}/open-webui.env
+Secret=openwebui_openai_api_key,type=env,target=OPENAI_API_KEY
 HealthCmd=curl -fsS http://127.0.0.1:{{ .openwebuiPort }}/health || exit 1
 HealthInterval=15s
 HealthRetries=3
