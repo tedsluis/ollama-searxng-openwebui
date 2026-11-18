@@ -1,6 +1,3 @@
-[Defaults]
-port = "8112"
-
 [[Services]]
 Service = "searxng.service"
 RestartedBy = ["settings.yml"]

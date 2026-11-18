@@ -1,5 +1,4 @@
 [Defaults]
-port = "8080"
 dataPath = "/opt/open-webui"
 
 [[Services]]

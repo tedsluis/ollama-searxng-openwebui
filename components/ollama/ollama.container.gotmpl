@@ -1,7 +1,8 @@
 [Unit]
 Description=Ollama LLM Server (Quadlet via Materia)
 After=network-online.target nvidia-persistenced.service
-Wants=network-online.target
+Wants=network-online.target nvidia-persistenced.service
+OnFailure=notify-failure@%n.service
 
 [Container]
 Image=docker.io/ollama/ollama:{{ .containerTag }}
@@ -10,7 +11,7 @@ Network=host
 AddDevice=nvidia.com/gpu=all
 SecurityLabelDisable=true
 Volume={{ .modelsPath }}:/root/.ollama:Z
-Environment=OLLAMA_HOST=0.0.0.0:11434
+Environment=OLLAMA_HOST=0.0.0.0:{{ .ollamaPort }}
 Environment=CUDA_VISIBLE_DEVICES=0
 Environment=OLLAMA_FLASH_ATTENTION=1
 Environment=OLLAMA_GPU_OVERHEAD={{ .gpuOverhead }}
@@ -26,9 +27,14 @@ HealthOnFailure=kill
 Notify=healthy
 
 [Service]
+# Regenerate the CDI spec on every start so it always matches the installed NVIDIA libraries
+ExecStartPre=/usr/bin/mkdir -p /run/cdi
+ExecStartPre=nvidia-ctk cdi generate --output=/run/cdi/nvidia.yaml
 TimeoutStartSec=900
-Restart=always
-RestartSec=3
+Restart=on-failure
+RestartSec=5
+RestartSteps=5
+RestartMaxDelaySec=5min
 
 [Install]
 WantedBy=multi-user.target default.target

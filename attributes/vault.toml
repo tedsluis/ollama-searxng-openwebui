@@ -1,5 +1,8 @@
 [globals]
 cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
+ollamaPort = "11434"
+searxngPort = "8112"
+openwebuiPort = "8080"
 
 [components.ollama]
 # renovate: datasource=docker depName=docker.io/ollama/ollama versioning=semver
@@ -12,12 +15,10 @@ cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
 [components.searxng]
 # renovate: datasource=docker depName=docker.io/searxng/searxng versioning=regex:^(?<major>\d{4})\.(?<minor>\d{1,2})\.(?<patch>\d{1,2})-(?<build>[0-9a-f]+)$
 containerTag = "2026.11.2-d138f443b"
-port = "8112"
 
 [components.open-webui]
 # renovate: datasource=docker depName=ghcr.io/open-webui/open-webui versioning=semver
 containerTag = "v0.13.0"
-port = "8080"
 dataPath = "/opt/open-webui"
 
 [components.renovate]

@@ -2,6 +2,7 @@
 Description=Open WebUI (Quadlet via Materia)
 After=network-online.target ollama.service searxng.service
 Wants=network-online.target ollama.service searxng.service
+OnFailure=notify-failure@%n.service
 
 [Container]
 Image=ghcr.io/open-webui/open-webui:{{ .containerTag }}
@@ -10,7 +11,7 @@ Network=host
 UserNS=keep-id
 Volume={{ .dataPath }}:/app/backend/data:Z
 EnvironmentFile={{ m_dataDir "open-webui" }}/open-webui.env
-HealthCmd=curl -fsS http://127.0.0.1:{{ .port }}/health || exit 1
+HealthCmd=curl -fsS http://127.0.0.1:{{ .openwebuiPort }}/health || exit 1
 HealthInterval=15s
 HealthRetries=3
 HealthStartPeriod=60s
@@ -19,9 +20,11 @@ Notify=healthy
 
 [Service]
 ExecStartPre=-/usr/bin/cp -a /opt/open-webui/webui.db /opt/open-webui/webui.db.pre-update.bak
-Restart=on-failure
 TimeoutStartSec=300
-RestartSec=10
+Restart=on-failure
+RestartSec=5
+RestartSteps=5
+RestartMaxDelaySec=5min
 
 [Install]
 WantedBy=multi-user.target default.target

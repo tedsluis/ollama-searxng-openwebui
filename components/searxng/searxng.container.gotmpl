@@ -2,13 +2,14 @@
 Description=SearXNG Metasearch Engine (Quadlet via Materia)
 After=network-online.target
 Wants=network-online.target
+OnFailure=notify-failure@%n.service
 
 [Container]
 Image=docker.io/searxng/searxng:{{ .containerTag }}
 ContainerName=searxng
-PublishPort=127.0.0.1:{{ .port }}:8080
+PublishPort=127.0.0.1:{{ .searxngPort }}:8080
 Volume={{ m_dataDir "searxng" }}/settings.yml:/etc/searxng/settings.yml:ro,Z
-Environment=SEARXNG_BASE_URL=http://127.0.0.1:{{ .port }}/
+Environment=SEARXNG_BASE_URL=http://127.0.0.1:{{ .searxngPort }}/
 HealthCmd=wget -q --spider http://127.0.0.1:8080/ || exit 1
 HealthInterval=15s
 HealthRetries=3
@@ -18,8 +19,10 @@ Notify=healthy
 
 [Service]
 TimeoutStartSec=300
-Restart=always
+Restart=on-failure
 RestartSec=5
+RestartSteps=5
+RestartMaxDelaySec=5min
 
 [Install]
 WantedBy=multi-user.target default.target

@@ -1,0 +1,7 @@
+[Unit]
+Description=Send failure notification for %i
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/materia/notify.env
+ExecStart=/usr/bin/sh -c 'systemctl status --no-pager --lines=15 "%i" 2>&1 | head -c 3000 | curl -fsS -m 15 -H "Title: %H: %i failed" -H "Priority: high" -H "Tags: rotating_light" --data-binary @- "$${NTFY_URL}"'

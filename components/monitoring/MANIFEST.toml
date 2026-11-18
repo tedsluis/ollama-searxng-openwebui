@@ -1,0 +1,3 @@
+[[Services]]
+Service = "stack-healthcheck.timer"
+Static = true
