@@ -10,6 +10,8 @@ containerTag = "0.40.14"
 modelsPath = "/usr/share/ollama/.ollama"
 gpuOverhead = "134217728"
 keepAlive = "15m"
+contextLength = "16384"
+kvCacheType = "q8_0"
 cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
 
 [components.searxng]

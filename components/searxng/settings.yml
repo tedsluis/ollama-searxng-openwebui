@@ -7,4 +7,9 @@ search:
 server:
   # secret_key komt uit de Podman secret 'searxng_secret' (env SEARXNG_SECRET)
   limiter: false
-  image_proxy: true
+  # Open WebUI gebruikt alleen de JSON-API; de image proxy is dan overbodig
+  image_proxy: false
+outgoing:
+  # Trage engines niet laten wachten: RAG-antwoorden blijven snel
+  request_timeout: 3.0
+  max_request_timeout: 6.0

@@ -18,6 +18,8 @@ Environment=OLLAMA_GPU_OVERHEAD={{ .gpuOverhead }}
 Environment=OLLAMA_NUM_PARALLEL=1
 Environment=OLLAMA_MAX_LOADED_MODELS=1
 Environment=OLLAMA_KEEP_ALIVE={{ .keepAlive }}
+Environment=OLLAMA_CONTEXT_LENGTH={{ .contextLength }}
+Environment=OLLAMA_KV_CACHE_TYPE={{ .kvCacheType }}
 PodmanArgs=--cpuset-cpus={{ .cpuPinList }}
 HealthCmd=/bin/ollama list || exit 1
 HealthInterval=15s
