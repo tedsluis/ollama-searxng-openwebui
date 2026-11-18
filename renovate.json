@@ -25,11 +25,6 @@
       "ignoreTests": true
     },
     {
-      "description": "Docker Hub provides release timestamps: wait 3 days for hotfix releases (ghcr.io cannot be aged)",
-      "matchDepNames": ["docker.io/ollama/ollama", "docker.io/searxng/searxng"],
-      "minimumReleaseAge": "3 days"
-    },
-    {
       "description": "Ollama: a minor bump on 0.x is breaking, review manually",
       "matchDepNames": ["docker.io/ollama/ollama"],
       "matchUpdateTypes": ["major", "minor"],
@@ -41,8 +36,8 @@
       "automerge": false
     },
     {
-      "description": "SearXNG publishes several builds per day: update at most once a week",
-      "matchDepNames": ["docker.io/searxng/searxng"],
+      "description": "Docker Hub returns no release timestamps here, so minimumReleaseAge cannot work; update weekly instead to skip short-lived releases",
+      "matchDepNames": ["docker.io/ollama/ollama", "docker.io/searxng/searxng"],
       "schedule": ["* 0-6 * * 1"]
     }
   ]
