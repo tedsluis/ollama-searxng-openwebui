@@ -4,3 +4,4 @@ dataPath = "/opt/open-webui"
 [[Services]]
 Service = "open-webui.service"
 RestartedBy = ["open-webui.env"]
+Timeout = 900

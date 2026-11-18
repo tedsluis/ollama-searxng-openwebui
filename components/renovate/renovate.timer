@@ -2,8 +2,8 @@
 Description=Run Renovate Container every 6 hours
 
 [Timer]
-OnBootSec=10min
-OnUnitActiveSec=6h
+OnCalendar=*-*-* 00/6:00:00
+RandomizedDelaySec=15min
 Persistent=true
 
 [Install]

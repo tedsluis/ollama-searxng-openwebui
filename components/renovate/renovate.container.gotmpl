@@ -2,6 +2,7 @@
 Description=Renovate Dependency Update Runner (Quadlet via Materia)
 After=network-online.target
 Wants=network-online.target
+OnFailure=notify-failure@%n.service
 
 [Container]
 Image=ghcr.io/renovatebot/renovate:{{ .containerTag }}
@@ -14,5 +15,4 @@ Environment=LOG_LEVEL=info
 
 [Service]
 Type=oneshot
-TimeoutStartSec=600
-ExecStartPost=/usr/local/bin/materia update -c /etc/materia/config.toml
+TimeoutStartSec=1800
