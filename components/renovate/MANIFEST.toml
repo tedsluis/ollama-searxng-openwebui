@@ -4,5 +4,3 @@ NoRestart = true
 [[Services]]
 Service = "renovate.timer"
 Static = true
-Disabled = true
-Stopped = true

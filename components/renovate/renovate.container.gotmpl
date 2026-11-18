@@ -12,6 +12,9 @@ Environment=RENOVATE_PLATFORM=github
 Environment=RENOVATE_REPOSITORIES={{ .githubRepo }}
 Environment="RENOVATE_GIT_AUTHOR=Renovate Bot <renovate@fedora.local>"
 Environment=LOG_LEVEL=info
+Environment=RENOVATE_ONBOARDING=false
+Environment=RENOVATE_REPOSITORY_CACHE=enabled
+Volume=renovate-cache:/tmp/renovate:U
 
 [Service]
 Type=oneshot
