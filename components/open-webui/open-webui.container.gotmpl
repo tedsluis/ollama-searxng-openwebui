@@ -15,13 +15,14 @@ Secret=openwebui_openai_api_key,type=env,target=OPENAI_API_KEY
 HealthCmd=curl -fsS http://127.0.0.1:{{ .openwebuiPort }}/health || exit 1
 HealthInterval=15s
 HealthRetries=3
-HealthStartPeriod=60s
+HealthStartPeriod=240s
 HealthOnFailure=kill
 Notify=healthy
 
 [Service]
-ExecStartPre=-/usr/bin/cp -a /opt/open-webui/webui.db /opt/open-webui/webui.db.pre-update.bak
-TimeoutStartSec=300
+# One backup per image version, taken before the first start (and thus before DB migrations); never overwritten
+ExecStartPre=/usr/bin/sh -c 'mkdir -p {{ .dataPath }}/backup && for f in webui.db webui.db-wal webui.db-shm; do if [ -f {{ .dataPath }}/$$f ]; then cp -a --update=none {{ .dataPath }}/$$f {{ .dataPath }}/backup/$$f.pre-{{ .containerTag }}; fi; done'
+TimeoutStartSec=900
 Restart=on-failure
 RestartSec=5
 RestartSteps=5

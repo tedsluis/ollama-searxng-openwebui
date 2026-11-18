@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily online backup of the Open WebUI database (via Materia)
+OnFailure=notify-failure@%n.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/mkdir -p {{ .dataPath }}/backup
+ExecStart=/usr/bin/podman exec open-webui python3 -c "import sqlite3, datetime; s = sqlite3.connect('/app/backend/data/webui.db'); d = sqlite3.connect('/app/backend/data/backup/webui-' + datetime.date.today().isoformat() + '.db'); s.backup(d); d.close(); s.close()"
+ExecStart=/usr/bin/find {{ .dataPath }}/backup -name 'webui-*.db' -mtime +14 -delete

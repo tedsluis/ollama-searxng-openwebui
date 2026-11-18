@@ -5,3 +5,7 @@ dataPath = "/opt/open-webui"
 Service = "open-webui.service"
 RestartedBy = ["open-webui.env"]
 Timeout = 900
+
+[[Services]]
+Service = "open-webui-backup.timer"
+Static = true
