@@ -27,3 +27,11 @@ dataPath = "/opt/open-webui"
 # renovate: datasource=docker depName=ghcr.io/renovatebot/renovate versioning=semver
 containerTag = "44.252.5"
 githubRepo = "tedsluis/ollama-searxng-openwebui"
+
+[components.monitoring]
+# Onder dit GPU-aandeel van een geladen model volgt een melding
+minGpuPercent = "40"
+# Vast testmodel voor de dagelijkse meting, bij voorkeur een dat volledig in VRAM past
+perfModel = "gpt-oss:20b"
+# Ondergrens in tokens/s: neem ongeveer de helft van de gemeten waarde
+perfMinTps = "3"

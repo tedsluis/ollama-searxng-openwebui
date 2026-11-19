@@ -1,0 +1,20 @@
+#!/usr/bin/bash
+# Meet tokens/s met een vast model en faalt onder de drempel.
+set -euo pipefail
+: "${OLLAMA_URL:?}" "${PERF_MODEL:?}" "${PERF_MIN_TPS:?}"
+
+body=$(jq -n --arg m "$PERF_MODEL" \
+  '{model: $m, stream: false, keep_alive: 0,
+    prompt: "Write the numbers from one to sixty as English words.",
+    options: {num_predict: 96, temperature: 0, seed: 1}}')
+
+resp=$(curl -fsS -m 600 "${OLLAMA_URL}/api/generate" -d "$body")
+tps=$(jq -r 'if (.eval_duration // 0) > 0
+             then (.eval_count / .eval_duration * 1e9 * 10 | round / 10)
+             else 0 end' <<<"$resp")
+
+echo "${PERF_MODEL}: ${tps} t/s (drempel ${PERF_MIN_TPS} t/s)"
+if ! jq -en --argjson t "$tps" --argjson m "$PERF_MIN_TPS" '$t >= $m' >/dev/null; then
+  echo "FOUT: ${PERF_MODEL} haalt ${tps} t/s" >&2
+  exit 1
+fi

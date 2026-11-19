@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Ollama throughput check (via Materia)
+After=ollama.service
+OnFailure=notify-failure@%n.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=900
+Environment=OLLAMA_URL=http://127.0.0.1:{{ .ollamaPort }}
+Environment=PERF_MODEL={{ .perfModel }}
+Environment=PERF_MIN_TPS={{ .perfMinTps }}
+ExecStart=/usr/bin/bash {{ m_dataDir "monitoring" }}/ollama-perf-check

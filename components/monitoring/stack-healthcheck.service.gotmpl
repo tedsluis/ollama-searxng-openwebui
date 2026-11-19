@@ -1,10 +1,9 @@
-[Unit]
-Description=End-to-end healthcheck of the AI stack (via Materia)
-OnFailure=notify-failure@%n.service
-
 [Service]
 Type=oneshot
+Environment=OLLAMA_URL=http://127.0.0.1:{{ .ollamaPort }}
+Environment=MIN_GPU_PERCENT={{ .minGpuPercent }}
 ExecStart=/usr/bin/curl -fsS -m 10 -o /dev/null http://127.0.0.1:{{ .ollamaPort }}/api/version
 ExecStart=/usr/bin/curl -fsS -m 10 -o /dev/null http://127.0.0.1:{{ .openwebuiPort }}/health
 ExecStart=/usr/bin/curl -fsS -m 10 -o /dev/null http://127.0.0.1:{{ .searxngPort }}/healthz
 ExecStart=/usr/bin/podman exec ollama nvidia-smi -L
+ExecStart=/usr/bin/bash {{ m_dataDir "monitoring" }}/ollama-gpu-check

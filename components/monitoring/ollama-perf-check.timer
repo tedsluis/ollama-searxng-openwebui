@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Ollama throughput check daily
+
+[Timer]
+OnCalendar=*-*-* 04:15:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,26 @@
+#!/usr/bin/bash
+# Faalt als een geladen model te weinig op de GPU staat.
+# Laadt zelf geen model: zonder geladen model is er niets te controleren.
+set -euo pipefail
+: "${OLLAMA_URL:?}"
+min=${MIN_GPU_PERCENT:-40}
+
+ps_json=$(curl -fsS -m 10 "${OLLAMA_URL}/api/ps")
+rows=$(jq -r '(.models // [])[] | select((.size // 0) > 0)
+              | [.name, .size, (.size_vram // 0)] | @tsv' <<<"$ps_json")
+
+if [ -z "$rows" ]; then
+  echo "geen lokaal model geladen; GPU-verdeling niet gecontroleerd"
+  exit 0
+fi
+
+rc=0
+while IFS=$'\t' read -r name size vram; do
+  pct=$(( vram * 100 / size ))
+  echo "${name}: ${pct}% op de GPU (drempel ${min}%)"
+  if [ "$pct" -lt "$min" ]; then
+    echo "FOUT: ${name} draait voor ${pct}% op de GPU" >&2
+    rc=1
+  fi
+done <<<"$rows"
+exit "$rc"
