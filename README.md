@@ -263,3 +263,15 @@ journalctl -u ollama.service -n 100 --no-pager | grep -E "inference compute|offl
 # 3. Verify SearXNG JSON output on port 8112
 curl -s "[http://127.0.0.1:8112/search?q=fedora+linux&format=json](http://127.0.0.1:8112/search?q=fedora+linux&format=json)" | head -c 500
 ```
+
+### 4.6 Bekende valkuil: `podman update` neemt de GPU weg
+
+Gebruik `podman update` (bijvoorbeeld `--cpuset-cpus`) nooit op de draaiende
+Ollama-container. De container verliest daarna de toegang tot de NVIDIA-apparaten:
+`nvidia-smi` in de container meldt `Failed to initialize NVML: Unknown Error`,
+Ollama logt `ggml_cuda_init: failed to initialize CUDA` en alle modellen draaien
+op de CPU. Herstel: `systemctl restart ollama`.
+
+Wijzig de CPU-pinning alleen via `cpuPinList` in `attributes/vault.toml` en een
+deploy. Diagnose: `ollama-diag status`. Gemeten op 2026-11-20: 16k context,
+KV-cache `q8_0` en 6 threads (standaard) zijn de beste instellingen voor deze host.
