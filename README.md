@@ -96,6 +96,8 @@ ollama-searxng-openwebui/
     └── monitoring/
         ├── MANIFEST.toml                       # Registers both timers
         ├── notify-failure@.service             # Sends an ntfy message when a unit fails
+        ├── ollama-diag                         # Tool: diagnostics, trigger test and benchmark (see 4.7)
+        ├── ollama-bench                        # Tool: quick tokens/s measurement of one model
         ├── stack-healthcheck.service.gotmpl    # End-to-end health check (see 4.5)
         ├── stack-healthcheck.timer             # Every 15 minutes
         ├── ollama-gpu-check                    # Script: is the loaded model on the GPU?
@@ -224,7 +226,7 @@ When `materia update` runs, Materia renders the templates to these host paths:
 * **Local Git cache:** `/var/lib/materia/source/`
 * **Quadlets:** `/etc/containers/systemd/<component>/` — `ollama.container`, `searxng.container`, `open-webui.container`, `renovate.container`
 * **Plain systemd units:** `/etc/systemd/system/` — `stack-healthcheck.{service,timer}`, `ollama-perf-check.{service,timer}`, `notify-failure@.service`, `open-webui-backup.{service,timer}`, `renovate.timer`
-* **Component data:** `/var/lib/materia/components/<component>/` — for example `searxng/settings.yml`, `searxng/limiter.toml`, `open-webui/open-webui.env`, `monitoring/ollama-gpu-check`, `monitoring/ollama-perf-check`
+* **Component data:** `/var/lib/materia/components/<component>/` — for example `searxng/settings.yml`, `searxng/limiter.toml`, `open-webui/open-webui.env`, `monitoring/ollama-gpu-check`, `monitoring/ollama-perf-check`, `monitoring/ollama-diag`, `monitoring/ollama-bench``
 
 ### 3.9 Automated GitOps Sync (`materia-sync.timer`)
 A host-managed timer pulls the repository and applies changes every 15 minutes. The units live in `/etc/systemd/system/materia-sync.{service,timer}` and are not part of this repository. The service runs `materia update -c /etc/materia/config.toml`, has a 30-minute timeout and triggers `notify-failure@` when it fails.
@@ -237,12 +239,20 @@ systemctl list-timers materia-sync.timer                 # next and last run
 A push to `main` is therefore rolled out within 15 minutes without any manual step.
 
 ### 3.10 Host Tools
-* **`jq`** is required by the monitoring scripts: `sudo dnf install -y jq`.
-* **`/usr/local/bin/ollama-diag`** — diagnostics, trigger test and benchmark (see 4.7).
-* **`/usr/local/bin/ollama-bench`** — quick tokens/s measurement of one model: `ollama-bench <model> [num_thread] [num_ctx]`.
+* **`jq`** is required by the monitoring scripts and tools: `sudo dnf install -y jq`.
+* **`ollama-diag`** — diagnostics, trigger test and benchmark (see 4.7).
+* **`ollama-bench`** — quick tokens/s measurement of one model: `ollama-bench <model> [num_thread] [num_ctx]`.
 
-Both scripts are host tools and are not deployed by Materia.
+Both tools are versioned in `components/monitoring/` and deployed by Materia to `/var/lib/materia/components/monitoring/`. To call them by name, create these wrappers once on the host; they never need to change:
 
+```bash
+for t in ollama-diag ollama-bench; do
+  printf '#!/usr/bin/bash\nexec /usr/bin/bash /var/lib/materia/components/monitoring/%s "$@"\n' "$t" | sudo tee /usr/local/bin/$t >/dev/null
+  sudo chmod 0755 /usr/local/bin/$t
+done
+```
+
+To change a tool, edit it in the repository and push; `materia-sync` rolls it out within 15 minutes.
 ---
 
 ## 4. Management & Command Cheatsheet
