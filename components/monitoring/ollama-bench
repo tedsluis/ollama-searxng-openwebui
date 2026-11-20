@@ -1,0 +1,23 @@
+#!/usr/bin/bash
+# /usr/local/bin/ollama-bench
+# Gebruik: ollama-bench <model> [num_thread] [num_ctx]
+set -euo pipefail
+model=${1:?geef een model op}
+threads=${2:-}
+ctx=${3:-}
+
+opts=$(jq -n --arg t "$threads" --arg c "$ctx" '
+  {num_predict: 200, temperature: 0, seed: 1}
+  + (if $t != "" then {num_thread: ($t | tonumber)} else {} end)
+  + (if $c != "" then {num_ctx: ($c | tonumber)} else {} end)')
+
+body=$(jq -n --arg m "$model" --argjson o "$opts" \
+  '{model: $m, stream: false, options: $o,
+    prompt: "Explain how Linux containers work in about 150 words."}')
+
+for i in 1 2 3; do
+  curl -fsS -m 1800 http://127.0.0.1:11434/api/generate -d "$body" \
+    | jq -r --arg i "$i" \
+      '"run \($i): \(.eval_count) tokens, \(.eval_count / .eval_duration * 1e9 * 100 | round / 100) t/s"'
+done
+podman exec ollama ollama ps
