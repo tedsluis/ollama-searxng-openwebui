@@ -1,14 +1,19 @@
 #!/usr/bin/bash
 # Meet tokens/s met een vast model en faalt onder de drempel.
+# De eerste aanroep laadt het model en warmt op; alleen de tweede telt.
 set -euo pipefail
 : "${OLLAMA_URL:?}" "${PERF_MODEL:?}" "${PERF_MIN_TPS:?}"
 
-body=$(jq -n --arg m "$PERF_MODEL" \
-  '{model: $m, stream: false, keep_alive: 0,
-    prompt: "Write the numbers from one to sixty as English words.",
-    options: {num_predict: 96, temperature: 0, seed: 1}}')
+gen() {  # gen <keep_alive als JSON>
+  curl -fsS -m 600 "${OLLAMA_URL}/api/generate" -d "$(jq -n \
+    --arg m "$PERF_MODEL" --argjson k "$1" \
+    '{model: $m, stream: false, keep_alive: $k,
+      prompt: "Write the numbers from one to sixty as English words.",
+      options: {num_predict: 96, temperature: 0, seed: 1}}')"
+}
 
-resp=$(curl -fsS -m 600 "${OLLAMA_URL}/api/generate" -d "$body")
+gen '"5m"' >/dev/null
+resp=$(gen 0)
 tps=$(jq -r 'if (.eval_duration // 0) > 0
              then (.eval_count / .eval_duration * 1e9 * 10 | round / 10)
              else 0 end' <<<"$resp")

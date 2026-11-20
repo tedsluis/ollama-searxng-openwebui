@@ -7,3 +7,4 @@ ExecStart=/usr/bin/curl -fsS -m 10 -o /dev/null http://127.0.0.1:{{ .openwebuiPo
 ExecStart=/usr/bin/curl -fsS -m 10 -o /dev/null http://127.0.0.1:{{ .searxngPort }}/healthz
 ExecStart=/usr/bin/podman exec ollama nvidia-smi -L
 ExecStart=/usr/bin/bash {{ m_dataDir "monitoring" }}/ollama-gpu-check
+ExecStart=/usr/bin/sh -c '! journalctl -u ollama.service --since -16min --no-pager | grep -q "failed to initialize CUDA"'
