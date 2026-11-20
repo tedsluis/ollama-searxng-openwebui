@@ -1,5 +1,5 @@
 [globals]
-cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
+#cpuPinList = "0,2,4,6,8,10,12,13,14,15,16,17,18,19"
 ollamaPort = "11434"
 searxngPort = "8112"
 openwebuiPort = "8080"

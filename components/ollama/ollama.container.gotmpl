@@ -12,7 +12,7 @@ AddDevice=nvidia.com/gpu=all
 SecurityLabelDisable=true
 Volume={{ .modelsPath }}:/root/.ollama:Z
 Environment=OLLAMA_HOST=127.0.0.1:{{ .ollamaPort }}
-Environment=CUDA_VISIBLE_DEVICES=0
+#Environment=CUDA_VISIBLE_DEVICES=0
 Environment=OLLAMA_FLASH_ATTENTION=1
 Environment=OLLAMA_GPU_OVERHEAD={{ .gpuOverhead }}
 Environment=OLLAMA_NUM_PARALLEL=1
