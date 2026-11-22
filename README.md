@@ -12,6 +12,89 @@ All image tags are pinned in `attributes/vault.toml` and updated by Renovate; no
 
 The stack is deployed as **rootful Podman Quadlets** (systemd-managed containers) and orchestrated via **[Prima Materia (`materia`)](https://github.com/stryan/materia)**.
 
+## Overview
+
+This repository provides a complete GitOps configuration for setting up a local AI platform on Fedora Linux, integrating Ollama for large language model inference, SearXNG for private search, and Open WebUI for a user-friendly interface. It uses Podman Quadlets for container management and Materia for orchestration, ensuring reproducible deployments with pinned container versions updated automatically by Renovate. The setup is optimized for systems with NVIDIA GPUs, including CPU pinning, GPU memory reservation, and performance monitoring.
+
+The system architecture is designed for single-user, high-performance AI workloads on Fedora 45, utilizing an Intel Core i5 (14th Gen) CPU with 64GB RAM and an NVIDIA RTX A2000 12GB GPU. Ollama is configured with specific parameters to maximize GPU utilization, including a custom CPU pinning list, context length, and K/V cache settings. SearXNG provides privacy-focused search capabilities, while Open WebUI offers an intuitive web interface for interacting with models. Monitoring components ensure system health through daily checks and failure notifications via ntfy.
+
+The configuration is managed declaratively using Materia, which deploys the system as rootful Podman Quadlets orchestrated by systemd. Automated updates are handled by Renovate, which proposes container image upgrades as pull requests. Backups for Open WebUI's database are performed daily, and GPU performance is monitored to detect potential issues. The setup also includes tools for diagnostics and benchmarking, ensuring optimal system performance and reliability.
+
+---
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f9d423', 'primaryTextColor': '#000', 'primaryBorderColor': '#ff6f61'}}}%%
+flowchart LR
+  %% Host
+  subgraph Host["Host (Fedora 45)"]
+    Materia["Materia‑sync.timer & service"]
+    Systemd["Systemd daemon"]
+  end
+
+  %% Materia deploys
+  Materia -->|deploys| Ollama["ollama.service (container)"]
+  Materia -->|deploys| Searxng["searxng.service (container)"]
+  Materia -->|deploys| OpenWebUI["open-webui.service (container)"]
+  Materia -->|deploys| Renovate["renovate.service (one‑shot)"]
+  Materia -->|deploys| Monitoring["Monitoring units (timers & services)"]
+
+  %% Inter‑component relationships
+  subgraph Connections["Runtime connections"]
+    Ollama -->|http://localhost:11434| OpenWebUI
+    Searxng -->|http://localhost:8112| OpenWebUI
+    OpenWebUI -->|http://localhost:8111| GenaiProxy["genai-proxy.service (external)"]
+  end
+
+  %% Monitoring
+  Monitoring -->|checks| StackHealth["stack-healthcheck.service"]
+  Monitoring -->|checks| PerfCheck["ollama-perf-check.service"]
+  Monitoring -->|checks| BackupCheck["open-webui-backup.service"]
+  Monitoring -->|checks| RenovateCheck["renovate.service"]
+  Monitoring -->|checks| MateriaCheck["materia-sync.service"]
+
+  %% Alerts
+  subgraph Alerts["Failure notifications"]
+    StackHealth -.->|fails| Notify["notify-failure@.service"]
+    PerfCheck -.->|fails| Notify
+    BackupCheck -.->|fails| Notify
+    RenovateCheck -.->|fails| Notify
+    MateriaCheck -.->|fails| Notify
+  end
+
+  %% Timer links
+  subgraph Timers["Timers"]
+    MateriaTimer["materia-sync.timer"] -->|every 15min| Materia
+    MonitorTimer["monitoring timers"] -->|stack-healthcheck.timer| StackHealth
+    MonitorTimer -->|ollama-perf-check.timer| PerfCheck
+    MonitorTimer -->|open-webui-backup.timer| BackupCheck
+  end
+
+  %% Data volumes
+  subgraph Volumes["Host volumes"]
+    OllamaVol["/usr/share/ollama/.ollama"] --> Ollama
+    OpenWebUIDir["/opt/open-webui"] --> OpenWebUI
+    GenaiProxyVol["/var/lib/genai-proxy"] --> GenaiProxy
+  end
+
+  %% Dependencies
+  OpenWebUI -->|depends on| Ollama
+  OpenWebUI -->|depends on| Searxng
+  OpenWebUI -->|depends on| GenaiProxy
+
+  %% Materia config
+  Materia -->|reads config from| Config["/etc/materia/config.toml"]
+  Config -.->|source repo| Repo["git://github.com/tedsluis/ollama‑searxng‑openwebui"]
+
+  classDef component fill:#e0f7fa,stroke:#006064,stroke-width:1px;
+  classDef host fill:#fff3e0,stroke:#ff6f61,stroke-width:1px;
+  classDef timer fill:#fce4ec,stroke:#c2185b,stroke-width:1px;
+  classDef alert fill:#ffebee,stroke:#b71c1c,stroke-width:1px;
+  classDef volume fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px;
+
+  class Host,Material,OpenWebUI,Searxng,Ollama,Renovate,Monitoring component;
+  class MateriaTimer,MonitorTimer timer;
+  class Notify alert;
+  class OllamaVol,OpenWebUIDir,GenaiProxyVol volume;
+```
 ---
 
 ## 1. System Architecture & Hardware Profile
@@ -226,7 +309,7 @@ When `materia update` runs, Materia renders the templates to these host paths:
 * **Local Git cache:** `/var/lib/materia/source/`
 * **Quadlets:** `/etc/containers/systemd/<component>/` — `ollama.container`, `searxng.container`, `open-webui.container`, `renovate.container`
 * **Plain systemd units:** `/etc/systemd/system/` — `stack-healthcheck.{service,timer}`, `ollama-perf-check.{service,timer}`, `notify-failure@.service`, `open-webui-backup.{service,timer}`, `renovate.timer`
-* **Component data:** `/var/lib/materia/components/<component>/` — for example `searxng/settings.yml`, `searxng/limiter.toml`, `open-webui/open-webui.env`, `monitoring/ollama-gpu-check`, `monitoring/ollama-perf-check`, `monitoring/ollama-diag`, `monitoring/ollama-bench``
+* **Component data:** `/var/lib/materia/components/<component>/` — for example `searxng/settings.yml`, `searxng/limiter.toml`, `open-webui/open-webui.env`, `monitoring/ollama-gpu-check`, `monitoring/ollama-perf-check`, `monitoring/ollama-diag`, `monitoring/ollama-bench`
 
 ### 3.9 Automated GitOps Sync (`materia-sync.timer`)
 A host-managed timer pulls the repository and applies changes every 15 minutes. The units live in `/etc/systemd/system/materia-sync.{service,timer}` and are not part of this repository. The service runs `materia update -c /etc/materia/config.toml`, has a 30-minute timeout and triggers `notify-failure@` when it fails.
@@ -238,12 +321,12 @@ systemctl list-timers materia-sync.timer                 # next and last run
 
 A push to `main` is therefore rolled out within 15 minutes without any manual step.
 
-### 3.10 Host Tools
+### 3.10 Host Tools (`/usr/local/bin`)
 * **`jq`** is required by the monitoring scripts and tools: `sudo dnf install -y jq`.
 * **`ollama-diag`** — diagnostics, trigger test and benchmark (see 4.7).
 * **`ollama-bench`** — quick tokens/s measurement of one model: `ollama-bench <model> [num_thread] [num_ctx]`.
 
-Both tools are versioned in `components/monitoring/` and deployed by Materia to `/var/lib/materia/components/monitoring/`. To call them by name, create these wrappers once on the host; they never need to change:
+Both tools are versioned in `components/monitoring/` and deployed by Materia to `/var/lib/materia/components/monitoring/`. Materia does not place anything in `/usr/local/bin`, so the commands `ollama-diag` and `ollama-bench` only exist after you create these wrappers once on the host. The wrappers never need to change:
 
 ```bash
 for t in ollama-diag ollama-bench; do
@@ -252,7 +335,10 @@ for t in ollama-diag ollama-bench; do
 done
 ```
 
+Verify with `command -v ollama-diag ollama-bench`; both must print a path under `/usr/local/bin`. Both tools need root, because they call `podman` and read the journal: run them with `sudo`.
+
 To change a tool, edit it in the repository and push; `materia-sync` rolls it out within 15 minutes.
+
 ---
 
 ## 4. Management & Command Cheatsheet
@@ -374,6 +460,8 @@ After a GPU incident the CUDA check keeps failing for up to 16 minutes, so one m
 ---
 
 ### 4.7 GPU & System Diagnostics
+
+`ollama-diag` and `ollama-bench` are installed as wrappers in `/usr/local/bin`; see 3.10 if the commands are not found.
 
 ```bash
 # 1. Full status: versions, devices, CDI spec, journal and a real GPU load test

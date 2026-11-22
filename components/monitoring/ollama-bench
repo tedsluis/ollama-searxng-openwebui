@@ -1,8 +1,8 @@
 #!/usr/bin/bash
 # /usr/local/bin/ollama-bench
-# Gebruik: ollama-bench <model> [num_thread] [num_ctx]
+# Usage: ollama-bench <model> [num_thread] [num_ctx]
 set -euo pipefail
-model=${1:?geef een model op}
+model=${1:?specify a model}
 threads=${2:-}
 ctx=${3:-}
 

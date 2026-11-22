@@ -1,10 +1,10 @@
 #!/usr/bin/bash
-# Meet tokens/s met een vast model en faalt onder de drempel.
-# De eerste aanroep laadt het model en warmt op; alleen de tweede telt.
+# Measures tokens/s with a fixed model and fails below the threshold.
+# The first call loads the model and warms up; only the second one counts.
 set -euo pipefail
 : "${OLLAMA_URL:?}" "${PERF_MODEL:?}" "${PERF_MIN_TPS:?}"
 
-gen() {  # gen <keep_alive als JSON>
+gen() {  # gen <keep_alive as JSON>
   curl -fsS -m 600 "${OLLAMA_URL}/api/generate" -d "$(jq -n \
     --arg m "$PERF_MODEL" --argjson k "$1" \
     '{model: $m, stream: false, keep_alive: $k,
@@ -18,8 +18,8 @@ tps=$(jq -r 'if (.eval_duration // 0) > 0
              then (.eval_count / .eval_duration * 1e9 * 10 | round / 10)
              else 0 end' <<<"$resp")
 
-echo "${PERF_MODEL}: ${tps} t/s (drempel ${PERF_MIN_TPS} t/s)"
+echo "${PERF_MODEL}: ${tps} t/s (threshold ${PERF_MIN_TPS} t/s)"
 if ! jq -en --argjson t "$tps" --argjson m "$PERF_MIN_TPS" '$t >= $m' >/dev/null; then
-  echo "FOUT: ${PERF_MODEL} haalt ${tps} t/s" >&2
+  echo "ERROR: ${PERF_MODEL} reaches ${tps} t/s" >&2
   exit 1
 fi

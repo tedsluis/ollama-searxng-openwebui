@@ -1,22 +1,22 @@
 #!/usr/bin/bash
-# ollama-diag: alle GPU-, model- en snelheidstesten voor de Ollama-container in een script.
+# ollama-diag: all GPU, model and throughput tests for the Ollama container in one script.
 #
-# Gebruik (als root):
-#   ollama-diag status              Alleen-lezen overzicht plus een echte GPU-laadtest (standaard)
-#   ollama-diag triggers            Zoekt wat de GPU-toegang wegneemt. HERSTART Ollama meerdere keren.
-#   ollama-diag bench [model ...]   Tokens/s en GPU-aandeel per model (standaard: alle lokale modellen)
-#   ollama-diag models              Controleert of elk model leesbare metadata heeft
+# Usage (as root):
+#   ollama-diag status              Read-only overview plus a real GPU load test (default)
+#   ollama-diag triggers            Finds what removes GPU access. RESTARTS Ollama several times.
+#   ollama-diag bench [model ...]   Tokens/s and GPU share per model (default: all local models)
+#   ollama-diag models              Checks that every model has readable metadata
 #   ollama-diag all                 status + models + triggers + bench
 #
-# Instellingen via omgevingsvariabelen:
-#   TEST_MODEL=Gemma3:4b   klein model voor de laadtest (moet volledig in VRAM passen)
-#   IDLE_SECONDS=120       wachttijd in de trigger "niets doen"
-#   WITH_MATERIA=1         neemt 'materia-sync.service' mee als trigger (rolt openstaande commits uit!)
-#   BENCH_RUNS=2           aantal runs per model in 'bench'
-#   BENCH_CTX=             num_ctx voor 'bench' (leeg = serverstandperfModelaard)
-#   LOG=/root/ollama-diag-<datum>.log
+# Settings via environment variables:
+#   TEST_MODEL=Gemma3:4b   small model for the load test (must fit entirely in VRAM)
+#   IDLE_SECONDS=120       waiting time of the "do nothing" trigger
+#   WITH_MATERIA=1         includes 'materia-sync.service' as a trigger (rolls out pending commits!)
+#   BENCH_RUNS=2           number of runs per model in 'bench'
+#   BENCH_CTX=             num_ctx for 'bench' (empty = server default)
+#   LOG=/root/ollama-diag-<date>.log
 #
-# Benodigd op de host: podman, curl, jq, nvidia-smi.
+# Required on the host: podman, curl, jq, nvidia-smi.
 
 set -uo pipefail
 
@@ -40,13 +40,13 @@ now()  { date '+%Y-%m-%d %H:%M:%S'; }
 need() {
   local missing=0 c
   for c in podman curl jq nvidia-smi journalctl systemctl; do
-    command -v "$c" >/dev/null 2>&1 || { say "ONTBREEKT: $c"; missing=1; }
+    command -v "$c" >/dev/null 2>&1 || { say "MISSING: $c"; missing=1; }
   done
-  [ "$missing" -eq 0 ] || { say "Installeer de ontbrekende programma's (jq: dnf install -y jq)."; exit 2; }
-  [ "$(id -u)" -eq 0 ] || { say "Draai dit script als root."; exit 2; }
+  [ "$missing" -eq 0 ] || { say "Install the missing programs (jq: dnf install -y jq)."; exit 2; }
+  [ "$(id -u)" -eq 0 ] || { say "Run this script as root."; exit 2; }
 }
 
-api() {  # api <pad> [json-body]
+api() {  # api <path> [json-body]
   if [ $# -ge 2 ]; then
     curl -fsS -m 1800 "${URL}$1" -d "$2"
   else
@@ -62,8 +62,8 @@ unload_all() {
   sleep 2
 }
 
-# Laadt een model via de echte weg en meldt waar het terechtkomt.
-# Zet de globale variabelen GPU_PCT, TPS, VRAM_MIB en CUDA_FAIL.
+# Loads a model the real way and reports where it ends up.
+# Sets the global variables GPU_PCT, TPS, VRAM_MIB and CUDA_FAIL.
 load_test() {  # load_test <model> [num_predict] [num_ctx]
   local model=$1 predict=${2:-32} ctx=${3:-} since body resp ps
   GPU_PCT=-1; TPS=0; VRAM_MIB=0; CUDA_FAIL=0
@@ -75,7 +75,7 @@ load_test() {  # load_test <model> [num_predict] [num_ctx]
       options: ({num_predict: $n, temperature: 0, seed: 1}
                 + (if $c != "" then {num_ctx: ($c | tonumber)} else {} end))}')
   if ! resp=$(api /api/generate "$body" 2>&1); then
-    say "   laden van ${model} mislukt: ${resp}"
+    say "   loading ${model} failed: ${resp}"
     return 1
   fi
   TPS=$(jq -r 'if (.eval_duration // 0) > 0
@@ -92,138 +92,138 @@ load_test() {  # load_test <model> [num_predict] [num_ctx]
 }
 
 verdict() {
-  if [ "$GPU_PCT" -ge 1 ] && [ "$CUDA_FAIL" -eq 0 ]; then echo "GPU OK"; else echo "GEEN GPU"; fi
+  if [ "$GPU_PCT" -ge 1 ] && [ "$CUDA_FAIL" -eq 0 ]; then echo "GPU OK"; else echo "NO GPU"; fi
 }
 
 gpu_line() {  # gpu_line <label>
-  printf '   %-34s %-9s gpu=%s%% vram=%sMiB %st/s cuda-fouten=%s\n' \
+  printf '   %-34s %-9s gpu=%s%% vram=%sMiB %st/s cuda-errors=%s\n' \
     "$1" "$(verdict)" "$GPU_PCT" "${VRAM_MIB:-?}" "$TPS" "$CUDA_FAIL"
 }
 
-probe_devices() {  # snelle proef zonder model; betrouwbaarheid wordt in 'status' naast de laadtest gelegd
+probe_devices() {  # quick probe without a model; 'status' shows it next to the load test to judge its reliability
   local out
   out=$(podman exec -e LD_LIBRARY_PATH="$LIBPATH" -e OLLAMA_LIBRARY_PATH="$LIBPATH" \
         "$CONTAINER" /usr/lib/ollama/llama-server --list-devices 2>&1 | grep -A6 'Available devices' | sed 's/^/   /')
-  say "${out:-   (geen uitvoer)}"
+  say "${out:-   (no output)}"
 }
 
 # --------------------------------------------------------------------------- status
 cmd_status() {
   head1 "STATUS  $(now)"
 
-  head2 "Versies en container"
+  head2 "Versions and container"
   say "   host:      $(uname -r), podman $(podman --version | awk '{print $3}')"
   say "   driver:    $(nvidia-smi --query-gpu=driver_version,name --format=csv,noheader 2>/dev/null)"
-  say "   nvidia-ctk: $(command -v nvidia-ctk || echo 'niet gevonden') $(nvidia-ctk --version 2>/dev/null | head -1)"
-  say "   ollama:    $(api /api/version 2>/dev/null | jq -r '.version // "geen antwoord"')"
-  podman ps --filter "name=^${CONTAINER}\$" --format '   container: {{.ID}} {{.Image}} aangemaakt {{.CreatedHuman}}, {{.Status}}'
+  say "   nvidia-ctk: $(command -v nvidia-ctk || echo 'not found') $(nvidia-ctk --version 2>/dev/null | head -1)"
+  say "   ollama:    $(api /api/version 2>/dev/null | jq -r '.version // "no answer"')"
+  podman ps --filter "name=^${CONTAINER}\$" --format '   container: {{.ID}} {{.Image}} created {{.CreatedHuman}}, {{.Status}}'
   say "   cpuset:    $(podman inspect "$CONTAINER" --format '{{.HostConfig.CpusetCpus}}' 2>/dev/null)"
-  say "   omgeving:"
+  say "   environment:"
   podman inspect "$CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
     | grep -E '^(OLLAMA_|CUDA_|NVIDIA_)' | sed 's/^/      /'
 
-  head2 "NVIDIA op de host"
+  head2 "NVIDIA on the host"
   say "   modules:   $(lsmod | awk '/^nvidia/ {printf "%s(%s) ", $1, $3}')"
   ls -l /dev/nvidia0 /dev/nvidiactl /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>&1 | sed 's/^/   /'
   nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu,temperature.gpu,power.draw \
-    --format=csv,noheader 2>&1 | sed 's/^/   gebruik:   /'
-  say "   processen op de GPU:"
+    --format=csv,noheader 2>&1 | sed 's/^/   usage:     /'
+  say "   processes on the GPU:"
   nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader 2>&1 | sed 's/^/      /'
 
-  head2 "CDI-spec"
+  head2 "CDI spec"
   local spec
   for spec in /run/cdi/nvidia.yaml /etc/cdi/nvidia.yaml; do
     if [ -f "$spec" ]; then
-      say "   $spec ($(stat -c '%y' "$spec" | cut -d. -f1)): $(grep -c 'path: /dev/' "$spec") apparaten, nvidia-uvm $(grep -c 'nvidia-uvm' "$spec")x"
+      say "   $spec ($(stat -c '%y' "$spec" | cut -d. -f1)): $(grep -c 'path: /dev/' "$spec") devices, nvidia-uvm $(grep -c 'nvidia-uvm' "$spec")x"
     else
-      say "   $spec: bestaat niet"
+      say "   $spec: does not exist"
     fi
   done
 
-  head2 "NVIDIA in de container"
+  head2 "NVIDIA in the container"
   podman exec "$CONTAINER" sh -c 'ls -l /dev/nvidia0 /dev/nvidiactl /dev/nvidia-uvm /dev/nvidia-uvm-tools 2>&1' | sed 's/^/   /'
   podman exec "$CONTAINER" nvidia-smi -L 2>&1 | sed 's/^/   nvidia-smi -L: /'
-  say "   kan de container de apparaten echt openen?"
+  say "   can the container really open the devices?"
   podman exec "$CONTAINER" sh -c 'for d in /dev/nvidiactl /dev/nvidia0 /dev/nvidia-uvm; do
-      if ( : < "$d" ) 2>/dev/null; then echo "      $d: open OK"; else echo "      $d: OPENEN MISLUKT"; fi; done'
+      if ( : < "$d" ) 2>/dev/null; then echo "      $d: open OK"; else echo "      $d: OPEN FAILED"; fi; done'
 
-  head2 "Snelle proef: llama-server --list-devices"
+  head2 "Quick probe: llama-server --list-devices"
   probe_devices
 
-  head2 "Echte laadtest met ${TEST_MODEL}"
+  head2 "Real load test with ${TEST_MODEL}"
   local loaded
   loaded=$(api /api/ps 2>/dev/null | jq -r '[(.models // [])[].name] | join(", ")')
-  say "   nu geladen: ${loaded:-niets}"
+  say "   currently loaded: ${loaded:-nothing}"
   unload_all
   if load_test "$TEST_MODEL"; then
-    gpu_line "laadtest"
+    gpu_line "load test"
     SUMMARY+=("status: ${TEST_MODEL} -> $(verdict) (gpu=${GPU_PCT}%, ${TPS} t/s)")
   fi
   podman exec "$CONTAINER" ollama ps 2>&1 | sed 's/^/   /'
 
-  head2 "Journal sinds de start van de container"
+  head2 "Journal since the container started"
   local start first
   start=$(systemctl show "$UNIT" -p ActiveEnterTimestamp --value)
-  say "   ${UNIT} actief sinds: ${start}"
+  say "   ${UNIT} active since: ${start}"
   first=$(journalctl -u "$UNIT" --since "$start" --no-pager 2>/dev/null | grep -m1 'failed to initialize CUDA')
-  say "   eerste CUDA-fout: ${first:-geen}"
-  say "   aantal CUDA-fouten:        $(journalctl -u "$UNIT" --since "$start" --no-pager | grep -c 'failed to initialize CUDA')"
-  say "   aantal discovery-time-outs: $(journalctl -u "$UNIT" --since "$start" --no-pager | grep -c 'GPU discovery watchdog timed out')"
-  say "   aantal 'size overflows':   $(journalctl -u "$UNIT" --since "$start" --no-pager | grep -c 'size overflows')"
-  say "   GPU-detectie bij de start:"
+  say "   first CUDA error: ${first:-none}"
+  say "   CUDA errors:               $(journalctl -u "$UNIT" --since "$start" --no-pager | grep -c 'failed to initialize CUDA')"
+  say "   discovery timeouts:        $(journalctl -u "$UNIT" --since "$start" --no-pager | grep -c 'GPU discovery watchdog timed out')"
+  say "   'size overflows':          $(journalctl -u "$UNIT" --since "$start" --no-pager | grep -c 'size overflows')"
+  say "   GPU detection at start:"
   journalctl -u "$UNIT" --since "$start" --no-pager \
     | grep -iE 'inference compute|msg="gpu memory"|no compatible GPUs|user overrode visible' | head -5 | cut -c1-260 | sed 's/^/      /'
-  say "   systemd-reloads sinds de start:"
+  say "   systemd reloads since start:"
   journalctl --since "$start" --no-pager 2>/dev/null | grep -E 'systemd\[1\]: Reloading\.\.\.' | tail -8 | sed 's/^/      /'
-  say "   kernelmeldingen NVIDIA (laatste 8):"
+  say "   NVIDIA kernel messages (last 8):"
   journalctl -k --since "$start" --no-pager 2>/dev/null | grep -iE 'NVRM|nvidia|Xid' | tail -8 | cut -c1-220 | sed 's/^/      /'
 }
 
 # --------------------------------------------------------------------------- models
 cmd_models() {
-  head1 "MODELLEN  $(now)"
+  head1 "MODELS  $(now)"
   local m out rc
   for m in $(api /api/tags | jq -r '.models[].name'); do
     out=$(podman exec "$CONTAINER" ollama show "$m" 2>&1 >/dev/null); rc=$?
     if [ "$rc" -eq 0 ]; then
       printf '   %-42s OK\n' "$m"
     else
-      printf '   %-42s FOUT: %s\n' "$m" "$(head -1 <<<"$out" | cut -c1-140)"
-      SUMMARY+=("models: ${m} is niet leesbaar")
+      printf '   %-42s ERROR: %s\n' "$m" "$(head -1 <<<"$out" | cut -c1-140)"
+      SUMMARY+=("models: ${m} is not readable")
     fi
   done
   local since n
   since=$(now); sleep 1
   podman exec "$CONTAINER" ollama list >/dev/null 2>&1; sleep 2
   n=$(journalctl -u "$UNIT" --since "$since" --no-pager | grep -c 'size overflows')
-  say "   'size overflows' na een volledige 'ollama list': ${n} (verwacht 0)"
-  SUMMARY+=("models: ${n} metadata-fouten bij 'ollama list'")
+  say "   'size overflows' after a full 'ollama list': ${n} (expected 0)"
+  SUMMARY+=("models: ${n} metadata errors on 'ollama list'")
 }
 
 # --------------------------------------------------------------------------- triggers
 restart_ollama() {
-  say "   herstart ${UNIT} ..."
-  systemctl restart "$UNIT" || say "   LET OP: herstart gaf een foutcode"
+  say "   restarting ${UNIT} ..."
+  systemctl restart "$UNIT" || say "   WARNING: restart returned an error code"
   sleep 3
 }
 
-trigger() {  # trigger <label> <commando...>
+trigger() {  # trigger <label> <command...>
   local label=$1; shift
   head2 "Trigger: ${label}"
-  say "   $(now)  uitvoeren: $*"
+  say "   $(now)  running: $*"
   "$@" 2>&1 | tail -3 | sed 's/^/   | /'
   unload_all
   load_test "$TEST_MODEL" || true
-  gpu_line "na: ${label}"
+  gpu_line "after: ${label}"
   if [ "$(verdict)" = "GPU OK" ]; then
-    SUMMARY+=("trigger '${label}': GPU blijft werken")
+    SUMMARY+=("trigger '${label}': GPU keeps working")
   else
-    SUMMARY+=("trigger '${label}': GPU KWIJT  <<<<<")
+    SUMMARY+=("trigger '${label}': GPU LOST  <<<<<")
     restart_ollama
     unload_all; load_test "$TEST_MODEL" || true
-    gpu_line "na herstel"
+    gpu_line "after recovery"
     if [ "$(verdict)" != "GPU OK" ]; then
-      SUMMARY+=("herstart na '${label}' herstelde de GPU NIET; triggertest gestopt")
+      SUMMARY+=("restart after '${label}' did NOT restore the GPU; trigger test stopped")
       return 1
     fi
   fi
@@ -232,28 +232,28 @@ trigger() {  # trigger <label> <commando...>
 
 cmd_triggers() {
   head1 "TRIGGERS  $(now)"
-  say "   Deze test herstart ${UNIT} en onderbreekt lopende chats."
+  say "   This test restarts ${UNIT} and interrupts running chats."
   if [ -t 0 ] && [ "${ASSUME_YES:-0}" != "1" ]; then
-    read -r -p "   Doorgaan? [j/N] " a
-    [ "$a" = "j" ] || [ "$a" = "J" ] || { say "   overgeslagen"; return 0; }
+    read -r -p "   Continue? [y/N] " a
+    [ "$a" = "y" ] || [ "$a" = "Y" ] || { say "   skipped"; return 0; }
   fi
 
   local cpus
   cpus=$(podman inspect "$CONTAINER" --format '{{.HostConfig.CpusetCpus}}')
 
-  head2 "Uitgangspunt: verse herstart"
+  head2 "Baseline: fresh restart"
   restart_ollama
   load_test "$TEST_MODEL" || true
-  gpu_line "direct na herstart"
+  gpu_line "right after restart"
   if [ "$(verdict)" != "GPU OK" ]; then
-    SUMMARY+=("triggers: GPU werkt al direct na een herstart niet; oorzaak zit in de start zelf")
-    say "   De GPU werkt direct na de herstart niet. Triggers testen heeft dan geen zin."
+    SUMMARY+=("triggers: GPU does not work right after a restart; the cause is in the start itself")
+    say "   The GPU does not work right after the restart. Testing triggers is pointless then."
     return 1
   fi
-  SUMMARY+=("triggers: direct na herstart -> GPU OK (${TPS} t/s)")
+  SUMMARY+=("triggers: right after restart -> GPU OK (${TPS} t/s)")
 
-  trigger "model ontladen en opnieuw laden" true || return 1
-  trigger "healthcheck van de container" podman healthcheck run "$CONTAINER" || return 1
+  trigger "unload and reload the model" true || return 1
+  trigger "container healthcheck" podman healthcheck run "$CONTAINER" || return 1
   trigger "podman exec nvidia-smi -L" podman exec "$CONTAINER" nvidia-smi -L || return 1
   trigger "nvidia-ctk cdi generate" nvidia-ctk cdi generate --output=/run/cdi/nvidia.yaml || return 1
   trigger "systemctl daemon-reload" systemctl daemon-reload || return 1
@@ -263,14 +263,14 @@ cmd_triggers() {
     trigger "materia-sync.service" systemctl start materia-sync.service || return 1
   else
     say ""
-    say "   materia-sync overgeslagen (WITH_MATERIA=1 neemt hem mee; rolt openstaande commits uit)"
+    say "   materia-sync skipped (WITH_MATERIA=1 includes it; rolls out pending commits)"
   fi
-  trigger "${IDLE_SECONDS}s niets doen" sleep "$IDLE_SECONDS" || return 1
+  trigger "${IDLE_SECONDS}s doing nothing" sleep "$IDLE_SECONDS" || return 1
 }
 
 # --------------------------------------------------------------------------- bench
 cmd_bench() {
-  head1 "BENCHMARK  $(now)  (runs=${BENCH_RUNS}, num_ctx=${BENCH_CTX:-standaard})"
+  head1 "BENCHMARK  $(now)  (runs=${BENCH_RUNS}, num_ctx=${BENCH_CTX:-default})"
   local models=("$@") m i line
   if [ ${#models[@]} -eq 0 ]; then
     mapfile -t models < <(api /api/tags | jq -r '.models[] | select((.size // 0) > 0) | .name')
@@ -280,10 +280,10 @@ cmd_bench() {
     unload_all
     line=""
     for i in $(seq 1 "$BENCH_RUNS"); do
-      if load_test "$m" 200 "$BENCH_CTX"; then line+="${TPS}  "; else line+="FOUT  "; fi
+      if load_test "$m" 200 "$BENCH_CTX"; then line+="${TPS}  "; else line+="ERROR  "; fi
     done
     printf '   %-40s %6s %8s  %s%s\n' "$m" "$GPU_PCT" "${VRAM_MIB}M" "$line" \
-      "$([ "$CUDA_FAIL" -gt 0 ] && echo ' CUDA-FOUT')"
+      "$([ "$CUDA_FAIL" -gt 0 ] && echo ' CUDA ERROR')"
     SUMMARY+=("bench: ${m} gpu=${GPU_PCT}% ${line}t/s")
   done
   unload_all
@@ -303,11 +303,11 @@ main() {
     *)        sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
   esac
 
-  head1 "SAMENVATTING"
+  head1 "SUMMARY"
   local s
   for s in "${SUMMARY[@]}"; do say "   - $s"; done
   say ""
-  say "   Volledige uitvoer: ${LOG}"
+  say "   Full output: ${LOG}"
 }
 
 main "$@" 2>&1 | tee "$LOG"
