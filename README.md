@@ -506,3 +506,295 @@ Change the CPU pinning only through `cpuPinList` in `attributes/vault.toml`, fol
 
 ### 4.9 Outside This Repository: `genai-proxy`
 Open WebUI uses an OpenAI-compatible endpoint at `http://127.0.0.1:8111/v1` (`OPENAI_API_BASE_URL` in `open-webui.env.gotmpl`). That endpoint is the locally built container `localhost/genai-proxy:latest`, started by the host unit `/etc/systemd/system/genai-proxy.service`. It is **not** managed by Materia, not updated by Renovate and not covered by the health checks.
+
+---
+
+### 4.10 Test results
+
+```bash
+$ sudo ollama-diag status
+
+######## STATUS  2026-11-22 15:29:47
+
+== Versions and container
+   host:      7.3.4-300.fc45.x86_64, podman 6.2.0
+   driver:    620.70.06, NVIDIA RTX A2000 12GB
+   nvidia-ctk: /usr/sbin/nvidia-ctk NVIDIA Container Toolkit CLI version 1.17.4
+   ollama:    0.40.14
+   container: e8bfcfc3d435 docker.io/ollama/ollama:0.40.14 created 4 minutes ago, Up 4 minutes (healthy)
+   cpuset:    0,2,4,6,8,10,12,13,14,15,16,17,18,19
+   environment:
+      NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      OLLAMA_FLASH_ATTENTION=1
+      OLLAMA_GPU_OVERHEAD=134217728
+      OLLAMA_KV_CACHE_TYPE=q8_0
+      OLLAMA_CONTEXT_LENGTH=16384
+      NVIDIA_VISIBLE_DEVICES=void
+      OLLAMA_HOST=127.0.0.1:11434
+      OLLAMA_KEEP_ALIVE=15m
+      OLLAMA_MAX_LOADED_MODELS=1
+      OLLAMA_NUM_PARALLEL=1
+
+== NVIDIA on the host
+   modules:   nvidia_uvm(4) nvidia_drm(5) nvidia_modeset(5) nvidia(93) 
+   crw-rw-rw-. 1 root root 195,   0 Nov 22 15:25 /dev/nvidia0
+   crw-rw-rw-. 1 root root 195, 255 Nov 22 15:25 /dev/nvidiactl
+   crw-rw-rw-. 1 root root 507,   0 Nov 22 15:25 /dev/nvidia-uvm
+   crw-rw-rw-. 1 root root 507,   1 Nov 22 15:25 /dev/nvidia-uvm-tools
+   usage:     3928 MiB, 12282 MiB, 0 %, 34.41, 5.33 W
+   processes on the GPU:
+      13480, /usr/lib/ollama/llama-server, 3914 MiB
+
+== CDI spec
+   /run/cdi/nvidia.yaml (2026-11-22 15:25:08): 13 devices, nvidia-uvm 2x
+   /etc/cdi/nvidia.yaml: does not exist
+
+== NVIDIA in the container
+   crw-rw-rw-. 1 root root 507,   0 Nov 22 14:25 /dev/nvidia-uvm
+   crw-rw-rw-. 1 root root 507,   1 Nov 22 14:25 /dev/nvidia-uvm-tools
+   crw-rw-rw-. 1 root root 195,   0 Nov 22 14:25 /dev/nvidia0
+   crw-rw-rw-. 1 root root 195, 255 Nov 22 14:25 /dev/nvidiactl
+   nvidia-smi -L: GPU 0: NVIDIA RTX A2000 12GB (UUID: GPU-6a78e8fc-9ae2-72c5-9dfe-5c9691078cfc)
+   can the container really open the devices?
+      /dev/nvidiactl: open OK
+      /dev/nvidia0: open OK
+      /dev/nvidia-uvm: open OK
+
+== Quick probe: llama-server --list-devices
+   Available devices:
+     (none)
+
+== Real load test with Gemma3:4b
+   currently loaded: Gemma3:4b
+   load test                          GPU OK    gpu=100% vram=3934MiB 71.2t/s cuda-errors=0
+   NAME         ID              SIZE      PROCESSOR    CONTEXT    RUNNER      UNTIL               
+   Gemma3:4b    68ceab7e468a    2.9 GB    100% GPU     16384      llamacpp    14 minutes from now    
+
+== Journal since the container started
+   ollama.service active since: Sun 2026-11-22 15:25:24 CET
+   first CUDA error: none
+   CUDA errors:               0
+   discovery timeouts:        0
+   'size overflows':          0
+   GPU detection at start:
+      Nov 22 15:27:10 fedora ollama[2532]: time=2026-11-22T14:27:10.705Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+      Nov 22 15:29:52 fedora ollama[2532]: time=2026-11-22T14:29:52.144Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+   systemd reloads since start:
+   NVIDIA kernel messages (last 8):
+
+######## SUMMARY
+   - status: Gemma3:4b -> GPU OK (gpu=100%, 71.2 t/s)
+
+   Full output: /root/ollama-diag-20261122-152947.log
+
+$ sudo ollama-diag bench
+
+######## BENCHMARK  2026-11-22 15:29:57  (runs=2, num_ctx=default)
+   model                                      gpu%     vram  t/s per run
+   gemma4-64k:12b                              100    9248M  20.9  39.5  
+   gpt-oss-64k:20b                              89   10850M  35.3  45.4  
+   qwen3-64k:30b-a3b                            97   10914M  47.7  48.3  
+   qwen3-coder-64k:30b                          97   10914M  46  45.3  
+   qwen3-coder:30b                              98   10894M  53.8  54.4  
+   gemma4:12b                                  100    8888M  39.2  39.3  
+   codellama:7B                                100    8376M  57  57.4  
+   deepseek-r1:8b                              100    6262M  42  42.4  
+   Gemma3:12B                                  100    9032M  27.3  27.2  
+   deepseek-coder-v2:16b                       100   10902M  91.9  93  
+   Gemma3:4b                                   100    3934M  68.1  68.3  
+   mistral:7B                                  100    5584M  47.3  47.4  
+   devstral:24b                                 69   10840M  9  8.5  
+   deepseek-r1:14b                             100   10060M  23.7  23.6  
+   qwen3:30b-a3b                                98   10894M  54.3  55.6  
+   codegemma:7b-instruct                       100    7166M  42.3  42.2  
+   huihui_ai/dolphin3-abliterated:latest       100    5890M  43.9  43.8  
+   HammerAI/mn-mag-mell-r1:latest              100    8402M  29  29  
+   qwen3:14b                                   100   10096M  23.7  23.7  
+   gpt-oss:20b                                  90   10886M  46.5  46.5  
+   qwen3.8:27b                                  54   11136M  6.6  6.1  
+
+######## SUMMARY
+   - bench: gemma4-64k:12b gpu=100% 20.9  39.5  t/s
+   - bench: gpt-oss-64k:20b gpu=89% 35.3  45.4  t/s
+   - bench: qwen3-64k:30b-a3b gpu=97% 47.7  48.3  t/s
+   - bench: qwen3-coder-64k:30b gpu=97% 46  45.3  t/s
+   - bench: qwen3-coder:30b gpu=98% 53.8  54.4  t/s
+   - bench: gemma4:12b gpu=100% 39.2  39.3  t/s
+   - bench: codellama:7B gpu=100% 57  57.4  t/s
+   - bench: deepseek-r1:8b gpu=100% 42  42.4  t/s
+   - bench: Gemma3:12B gpu=100% 27.3  27.2  t/s
+   - bench: deepseek-coder-v2:16b gpu=100% 91.9  93  t/s
+   - bench: Gemma3:4b gpu=100% 68.1  68.3  t/s
+   - bench: mistral:7B gpu=100% 47.3  47.4  t/s
+   - bench: devstral:24b gpu=69% 9  8.5  t/s
+   - bench: deepseek-r1:14b gpu=100% 23.7  23.6  t/s
+   - bench: qwen3:30b-a3b gpu=98% 54.3  55.6  t/s
+   - bench: codegemma:7b-instruct gpu=100% 42.3  42.2  t/s
+   - bench: huihui_ai/dolphin3-abliterated:latest gpu=100% 43.9  43.8  t/s
+   - bench: HammerAI/mn-mag-mell-r1:latest gpu=100% 29  29  t/s
+   - bench: qwen3:14b gpu=100% 23.7  23.7  t/s
+   - bench: gpt-oss:20b gpu=90% 46.5  46.5  t/s
+   - bench: qwen3.8:27b gpu=54% 6.6  6.1  t/s
+
+   Full output: /root/ollama-diag-20261122-152957.log
+
+$ sudo ollama-diag models
+
+######## MODELS  2026-11-22 15:41:27
+   gemma4-64k:12b                             OK
+   gpt-oss-64k:20b                            OK
+   qwen3-64k:30b-a3b                          OK
+   qwen3-coder-64k:30b                        OK
+   qwen3-coder:30b                            OK
+   gemma4:12b                                 OK
+   codellama:7B                               OK
+   deepseek-r1:8b                             OK
+   Gemma3:12B                                 OK
+   deepseek-coder-v2:16b                      OK
+   Gemma3:4b                                  OK
+   mistral:7B                                 OK
+   devstral:24b                               OK
+   deepseek-r1:14b                            OK
+   qwen3:30b-a3b                              OK
+   codegemma:7b-instruct                      OK
+   huihui_ai/dolphin3-abliterated:latest      OK
+   HammerAI/mn-mag-mell-r1:latest             OK
+   qwen3:14b                                  OK
+   gpt-oss:20b                                OK
+   qwen3.8:27b                                OK
+   'size overflows' after a full 'ollama list': 0 (expected 0)
+
+######## SUMMARY
+   - models: 0 metadata errors on 'ollama list'
+
+   Full output: /root/ollama-diag-20261122-154127.log
+
+$ sudo ollama-diag triggers
+
+######## TRIGGERS  2026-11-22 15:41:38
+   This test restarts ollama.service and interrupts running chats.
+   Continue? [y/N] y
+
+== Baseline: fresh restart
+   restarting ollama.service ...
+   right after restart                GPU OK    gpu=100% vram=3928MiB 12.6t/s cuda-errors=0
+
+== Trigger: unload and reload the model
+   2026-11-22 15:42:29  running: true
+   after: unload and reload the model GPU OK    gpu=100% vram=3934MiB 69.7t/s cuda-errors=0
+
+== Trigger: container healthcheck
+   2026-11-22 15:42:35  running: podman healthcheck run ollama
+   after: container healthcheck       GPU OK    gpu=100% vram=3934MiB 70.9t/s cuda-errors=0
+
+== Trigger: podman exec nvidia-smi -L
+   2026-11-22 15:42:41  running: podman exec ollama nvidia-smi -L
+   | GPU 0: NVIDIA RTX A2000 12GB (UUID: GPU-6a78e8fc-9ae2-72c5-9dfe-5c9691078cfc)
+   after: podman exec nvidia-smi -L   GPU OK    gpu=100% vram=3934MiB 70.7t/s cuda-errors=0
+
+== Trigger: nvidia-ctk cdi generate
+   2026-11-22 15:42:46  running: nvidia-ctk cdi generate --output=/run/cdi/nvidia.yaml
+   | time="2026-11-22T15:42:47+01:00" level=warning msg="Could not locate nvidia_drv.so: pattern nvidia_drv.so not found"
+   | time="2026-11-22T15:42:47+01:00" level=warning msg="Could not locate libglxserver_nvidia.so.620.70.06: pattern libglxserver_nvidia.so.620.70.06 not found"
+   | time="2026-11-22T15:42:47+01:00" level=info msg="Generated CDI spec with version 0.8.0"
+   after: nvidia-ctk cdi generate     GPU OK    gpu=100% vram=3934MiB 70.2t/s cuda-errors=0
+
+== Trigger: systemctl daemon-reload
+   2026-11-22 15:42:52  running: systemctl daemon-reload
+   after: systemctl daemon-reload     GPU OK    gpu=100% vram=3934MiB 70.4t/s cuda-errors=0
+
+== Trigger: podman update --cpuset-cpus
+   2026-11-22 15:42:58  running: podman update --cpuset-cpus 0,2,4,6,8,10,12,13,14,15,16,17,18,19 ollama
+   | 53fb5b00f25c150f8e3ed2b278c811f0675568c237cc72f7e63be08a3b84dedd
+   after: podman update --cpuset-cpus NO GPU    gpu=0% vram=8MiB 22.5t/s cuda-errors=1
+   restarting ollama.service ...
+   after recovery                     GPU OK    gpu=100% vram=3928MiB 12.8t/s cuda-errors=0
+
+== Trigger: stack-healthcheck.service
+   2026-11-22 15:43:56  running: systemctl start stack-healthcheck.service
+   | Job for stack-healthcheck.service failed because the control process exited with error code.
+   | See "systemctl status stack-healthcheck.service" and "journalctl -xeu stack-healthcheck.service" for details.
+   after: stack-healthcheck.service   GPU OK    gpu=100% vram=3934MiB 71t/s cuda-errors=0
+
+   materia-sync skipped (WITH_MATERIA=1 includes it; rolls out pending commits)
+
+== Trigger: 120s doing nothing
+   2026-11-22 15:44:02  running: sleep 120
+   after: 120s doing nothing          GPU OK    gpu=100% vram=3934MiB 70.8t/s cuda-errors=0
+
+######## SUMMARY
+   - triggers: right after restart -> GPU OK (12.6 t/s)
+   - trigger 'unload and reload the model': GPU keeps working
+   - trigger 'container healthcheck': GPU keeps working
+   - trigger 'podman exec nvidia-smi -L': GPU keeps working
+   - trigger 'nvidia-ctk cdi generate': GPU keeps working
+   - trigger 'systemctl daemon-reload': GPU keeps working
+   - trigger 'podman update --cpuset-cpus': GPU LOST  <<<<<
+   - trigger 'stack-healthcheck.service': GPU keeps working
+   - trigger '120s doing nothing': GPU keeps working
+
+   Full output: /root/ollama-diag-20261122-154138.log
+
+$ nvidia-smi dmon -s pucvmet -d 1
+# gpu    pwr  gtemp  mtemp     sm    mem    enc    dec    jpg    ofa   mclk   pclk  pviol  tviol     fb   bar1   ccpm  sbecc  dbecc    pci  rxpci  txpci 
+# Idx      W      C      C      %      %      %      %      %      %    MHz    MHz      %   bool     MB     MB     MB   errs   errs   errs   MB/s   MB/s 
+    0     22     40      -      0      0      0      0      0      0   5701   1372      0      0    112      4      0      -      -      0      0      0 
+    0     22     40      -      0      0      0      0      0      0   5701   1200      0      0    112      4      0      -      -      0      0      0 
+    0     22     40      -      0      0      0      0      0      0   5701   1200      0      0    112      4      0      -      -      0      0      0 
+    0     26     42      -      4      4      0      0      0      0   5701   1897      0      0   8208      4      0      -      -      0      0      0 
+    0     32     42      -      0      0      0      0      0      0   5701   1897      0      0   8208      4      0      -      -      0      0      0 
+    0     28     41      -      0      0      0      0      0      0   5701   1200      0      0   8208      4      0      -      -      0      0      0 
+    0     22     41      -      0      0      0      0      0      0   5701   1200      0      0   8208      4      0      -      -      0      0      0 
+    0     22     41      -      0      0      0      0      0      0   5701   1200      0      0   8208      4      0      -      -      0      0      0 
+    0     22     41      -      0      0      0      0      0      0   5701   1200      0      0   8208      4      0      -      -      0      0      0 
+    0     22     41      -      0      0      0      0      0      0   5701   1200      0      0   8208      4      0      -      -      0      0      0 
+    0     22     41      -     99     84      0      0      0      0   5701   1177      0      0   8208      4      0      -      -      0      0      1 
+    0     24     41      -      8      4      0      0      0      0   5701   1200      7      0   9248      4      0      -      -      0      0      0 
+    0     22     41      -      0      0      0      0      0      0   5701   1200      0      0   9248      4      0      -      -      0      0      0 
+    0     22     41      -      0      0      0      0      0      0   5701   1200      0      0   9248      4      0      -      -      0      0      0 
+    0     22     41      -      0      0      0      0      0      0   5701   1200      0      0   9248      4      0      -      -      0      0      0 
+    0     22     41      -      0      0      0      0      0      0   5701   1200      0      0   9248      4      0      -      -      0      0      0 
+
+$ journalctl -u ollama.service -b --no-pager | grep -E "inference compute|gpu memory|failed to initialize CUDA"A"
+Nov 22 15:25:12 fedora ollama[2532]: time=2026-11-22T14:25:12.177Z level=INFO source=types.go:32 msg="inference compute" id=0 filter_id=0 library=CUDA compute=8.6 name=CUDA0 description="NVIDIA RTX A2000 12GB" libdirs=ollama,cuda_v13 driver=13.5 pci_id=0000:01:00.0 type=discrete total="11.6 GiB" available="11.5 GiB"
+Nov 22 15:27:10 fedora ollama[2532]: time=2026-11-22T14:27:10.705Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:29:52 fedora ollama[2532]: time=2026-11-22T14:29:52.144Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:30:01 fedora ollama[2532]: time=2026-11-22T14:30:01.043Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:30:43 fedora ollama[2532]: time=2026-11-22T14:30:43.786Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:31:28 fedora ollama[2532]: time=2026-11-22T14:31:28.750Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:31:54 fedora ollama[2532]: time=2026-11-22T14:31:54.674Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:32:14 fedora ollama[2532]: time=2026-11-22T14:32:14.926Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:32:28 fedora ollama[2532]: time=2026-11-22T14:32:28.968Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:32:50 fedora ollama[2532]: time=2026-11-22T14:32:50.654Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:33:20 fedora ollama[2532]: time=2026-11-22T14:33:20.747Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:33:49 fedora ollama[2532]: time=2026-11-22T14:33:49.656Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:34:11 fedora ollama[2532]: time=2026-11-22T14:34:11.750Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:34:30 fedora ollama[2532]: time=2026-11-22T14:34:30.584Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:34:43 fedora ollama[2532]: time=2026-11-22T14:34:43.614Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:35:01 fedora ollama[2532]: time=2026-11-22T14:35:01.079Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:36:03 fedora ollama[2532]: time=2026-11-22T14:36:03.692Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:36:36 fedora ollama[2532]: time=2026-11-22T14:36:36.127Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:37:00 fedora ollama[2532]: time=2026-11-22T14:37:00.883Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:37:19 fedora ollama[2532]: time=2026-11-22T14:37:19.378Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:37:36 fedora ollama[2532]: time=2026-11-22T14:37:36.898Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:38:00 fedora ollama[2532]: time=2026-11-22T14:38:00.840Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:38:33 fedora ollama[2532]: time=2026-11-22T14:38:33.510Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:38:56 fedora ollama[2532]: time=2026-11-22T14:38:56.687Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:41:44 fedora ollama[23607]: time=2026-11-22T14:41:44.416Z level=INFO source=types.go:32 msg="inference compute" id=0 filter_id=0 library=CUDA compute=8.6 name=CUDA0 description="NVIDIA RTX A2000 12GB" libdirs=ollama,cuda_v13 driver=13.5 pci_id=0000:01:00.0 type=discrete total="11.6 GiB" available="11.5 GiB"
+Nov 22 15:41:49 fedora ollama[23607]: time=2026-11-22T14:41:49.465Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:42:33 fedora ollama[23607]: time=2026-11-22T14:42:33.802Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:42:39 fedora ollama[23607]: time=2026-11-22T14:42:39.629Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:42:45 fedora ollama[23607]: time=2026-11-22T14:42:45.324Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:42:50 fedora ollama[23607]: time=2026-11-22T14:42:50.960Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:42:56 fedora ollama[23607]: time=2026-11-22T14:42:56.976Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:43:02 fedora ollama[23607]: time=2026-11-22T14:43:02.271Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="8.2 GiB" free="8.8 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:43:02 fedora ollama[23607]: ggml_cuda_init: failed to initialize CUDA: no CUDA-capable device is detected
+Nov 22 15:43:09 fedora ollama[25763]: time=2026-11-22T14:43:09.804Z level=INFO source=types.go:32 msg="inference compute" id=0 filter_id=0 library=CUDA compute=8.6 name=CUDA0 description="NVIDIA RTX A2000 12GB" libdirs=ollama,cuda_v13 driver=13.5 pci_id=0000:01:00.0 type=discrete total="11.6 GiB" available="11.5 GiB"
+Nov 22 15:43:16 fedora ollama[25763]: time=2026-11-22T14:43:16.819Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:44:00 fedora ollama[25763]: time=2026-11-22T14:44:00.614Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:46:06 fedora ollama[25763]: time=2026-11-22T14:46:06.345Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+Nov 22 15:51:11 fedora ollama[25763]: time=2026-11-22T14:51:11.026Z level=INFO source=sched.go:665 msg="gpu memory" id=0 library=CUDA available="11.0 GiB" free="11.5 GiB" minimum="457.0 MiB" overhead="128.0 MiB"
+
+$ curl -s "http://127.0.0.1:8112/search?q=fedora+linux&format=json" | jq '.results | length'
+39
+```
