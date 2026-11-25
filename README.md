@@ -106,7 +106,7 @@ This configuration is tuned for the following host:
 | **OS** | Fedora 45 Linux | SELinux `enforcing`, systemd, Podman 6.1 (Materia requires 5.4 or higher) |
 | **CPU** | Intel Core i5 (14th Gen) | 20 logical CPUs on **14 physical cores**:<br>• **6 P-cores** (CPUs `0-11`, two threads each, up to 5000 MHz)<br>• **8 E-cores** (CPUs `12-19`, up to 3700 MHz)<br>• Energy profile: `tuned` set to `throughput-performance` |
 | **Memory & Storage** | 64 GB DDR5 RAM & 1 TB NVMe SSD | Enough RAM to run the part of a model that does not fit in VRAM. |
-| **GPU** | NVIDIA RTX A2000 12GB | • **12,282 MB VRAM**<br>• **PCIe Gen4 x16**, Bus ID `PCI:1:0:0`<br>• **70 W power cap** (via PCIe slot)<br>• **Driver:** `615.78.08` (CUDA `13.4`) |
+| **GPU** | NVIDIA RTX A2000 12GB | • **12,282 MB VRAM**<br>• **PCIe Gen4 x16**, Bus ID `PCI:1:0:0`<br>• **70 W power cap** (via PCIe slot)<br>• **Driver:** `620.70.06` (CUDA `13.5`) |
 
 ### 1.1 Ollama Settings
 
@@ -509,7 +509,296 @@ Open WebUI uses an OpenAI-compatible endpoint at `http://127.0.0.1:8111/v1` (`OP
 
 ---
 
-### 4.10 Test results
+### 4.10 Large-Context Model Variants (64k and 128k)
+
+The server default is a 16k context (`OLLAMA_CONTEXT_LENGTH=16384`). Coding agents such as OpenCode need 64k or more. Instead of raising the default for every model, this host uses **model variants**: a variant is a second name for an existing model with a fixed `num_ctx`. A variant shares the weights of its base model, so it costs no extra disk space, and the 16k default stays in place for Open WebUI.
+
+Variants are needed because OpenCode connects through Ollama's OpenAI-compatible `/v1` endpoint and has no setting for Ollama's `num_ctx`; the context has to be fixed on the Ollama side.
+
+The variants are host state: they live in the Ollama model store (`/usr/share/ollama/.ollama`), not in this repository. Recreate them with the commands below after a reinstall.
+
+#### Step 1: Check whether a model is suitable
+
+A model is suitable for a larger context when all three checks pass.
+
+**a. The model supports the context length.** `context length` is the maximum the model was trained for. Never set `num_ctx` higher than this value:
+
+```bash
+for m in qwen3-coder:30b gpt-oss:20b gemma4:12b qwen3:30b-a3b; do
+  echo "== $m"; sudo podman exec ollama ollama show "$m" | grep -i 'context length'
+done
+```
+
+Result on this host:
+
+| Model | `context length` | 64k | 128k |
+| :--- | :--- | :--- | :--- |
+| `qwen3-coder:30b` | 262144 | yes | yes |
+| `gemma4:12b` | 262144 | yes | yes |
+| `qwen3:30b-a3b` | 262144 | yes | yes |
+| `gpt-oss:20b` | 131072 | yes | yes (exactly the maximum) |
+
+**b. The model supports tool calling** (required for OpenCode). The `Capabilities` block of `ollama show` must list `tools`:
+
+```bash
+sudo podman exec ollama ollama show qwen3-coder:30b
+```
+
+**c. The model still fits on the GPU with the larger context.** Benchmark the base model with the target context before creating a variant. `BENCH_CTX` sets `num_ctx` per request, so nothing has to be changed or deployed:
+
+```bash
+sudo BENCH_CTX=65536  ollama-diag bench qwen3-coder:30b gpt-oss:20b gemma4:12b qwen3:30b-a3b
+sudo BENCH_CTX=131072 ollama-diag bench qwen3-coder:30b gpt-oss:20b gemma4:12b qwen3:30b-a3b
+```
+
+Compare the GPU share and the tokens/s with the 16k values. A model is suitable when the GPU share stays about the same and the speed drops by no more than roughly 10 to 15 percent. Measured on this host (second run, 200 tokens):
+
+| Model | 16k | 64k | 128k |
+| :--- | :--- | :--- | :--- |
+| `gemma4:12b` | 100% GPU, 8.9 GB, 36 t/s | 100% GPU, 9.3 GB, 36 t/s | 100% GPU, 10.2 GB, 40 t/s |
+| `gpt-oss:20b` | 90% GPU, 43 t/s | 89% GPU, 41.5 t/s | 87% GPU, 42.5 t/s |
+| `qwen3:30b-a3b` | 98% GPU, 50 t/s | 97% GPU, 44.5 t/s | 97% GPU, 39 t/s |
+| `qwen3-coder:30b` | 98% GPU, 54 t/s | 97% GPU, 44 t/s | 97% GPU, 39 t/s |
+
+The columns were measured on different days (2026-11-20 to 2026-11-23, partly before the driver update to 620.70.06); rerun the benchmark for current values. The quantized K/V cache (`OLLAMA_KV_CACHE_TYPE=q8_0`) is the reason the larger context costs so little VRAM.
+
+The benchmark uses a short prompt, so it only shows that the context window fits in memory. With a window that is really full, reading the prompt takes noticeably longer per turn.
+
+#### Step 2: Create the variants
+
+The name of a variant is the base name plus `-64k` or `-128k` in front of the tag, for example `qwen3-coder-64k:30b`.
+
+```bash
+# 64k variants
+for m in qwen3-coder:30b gpt-oss:20b gemma4:12b qwen3:30b-a3b; do
+  name="${m%%:*}-64k:${m##*:}"
+  printf 'FROM %s\nPARAMETER num_ctx 65536\n' "$m" \
+    | sudo podman exec -i ollama sh -c "cat > /tmp/Modelfile && ollama create $name -f /tmp/Modelfile"
+done
+
+# 128k variants (only models whose context length is 131072 or higher)
+for m in qwen3-coder:30b gpt-oss:20b gemma4:12b; do
+  name="${m%%:*}-128k:${m##*:}"
+  printf 'FROM %s\nPARAMETER num_ctx 131072\n' "$m" \
+    | sudo podman exec -i ollama sh -c "cat > /tmp/Modelfile && ollama create $name -f /tmp/Modelfile"
+done
+```
+
+`ollama create` prints `using existing layer` for the weights and creates one small new layer for the parameter. Add `qwen3:30b-a3b` to the second loop if a 128k variant of that model is wanted as well.
+
+#### Step 3: Verify the variants
+
+```bash
+# 1. The variants exist
+sudo podman exec ollama ollama list | grep -P '(64k|128k)'
+
+# 2. The parameter is stored in the variant
+sudo podman exec ollama ollama show qwen3-coder-128k:30b | grep -i num_ctx
+
+# 3. Load a variant and check the real context and the GPU share
+sudo ollama-diag bench qwen3-coder-64k:30b qwen3-coder-128k:30b
+curl -s http://127.0.0.1:11434/api/generate -d '{"model":"qwen3-coder-128k:30b","prompt":"hi","stream":false}' >/dev/null
+sudo podman exec ollama ollama ps
+```
+
+`ollama ps` must show the variant with `CONTEXT 65536` or `CONTEXT 131072` and a GPU share close to the benchmark. A lower number in the `CONTEXT` column means Ollama capped the context; use that number as the limit in the client.
+
+Variants on this host:
+
+| Variant | Base model | `num_ctx` |
+| :--- | :--- | :--- |
+| `qwen3-coder-64k:30b` | `qwen3-coder:30b` | 65536 |
+| `qwen3-64k:30b-a3b` | `qwen3:30b-a3b` | 65536 |
+| `gpt-oss-64k:20b` | `gpt-oss:20b` | 65536 |
+| `gemma4-64k:12b` | `gemma4:12b` | 65536 |
+| `qwen3-coder-128k:30b` | `qwen3-coder:30b` | 131072 |
+| `gpt-oss-128k:20b` | `gpt-oss:20b` | 131072 |
+| `gemma4-128k:12b` | `gemma4:12b` | 131072 |
+
+Remove a variant with `sudo podman exec ollama ollama rm <variant>`; the base model is not affected. Pull the base model again and recreate the variant after a base model update, because a variant keeps pointing at the layers it was created from.
+
+---
+
+### 4.11 OpenCode with Local Models
+
+[OpenCode](https://opencode.ai) is an open-source terminal coding agent. On this host it runs against the local Ollama models with the 64k and 128k variants from 4.10, and it can search the web through the local SearXNG instance. OpenCode and its configuration are per-user host state and are not part of this repository.
+
+#### Rules for this host
+
+* **Run OpenCode as a normal user (`tedsluis`), never as root** and never through `sudo -i`. The agent runs shell commands with the rights of the user who started it.
+* **Work in a clone under `~/projects`, never in `/opt/ollama-searxng-openwebui`.** A push to `main` is rolled out to the host within 15 minutes (see 3.9), so the agent must not push; review the diff and push yourself.
+* **Do not type `sudo` in the terminal in which OpenCode runs.**
+* **Keep the permission prompts on** and do not approve a command you do not understand.
+
+#### Step 1: Install OpenCode
+
+```bash
+curl -fsSL https://opencode.ai/install | bash
+exec bash -l
+opencode --version          # 1.19.6 at the time of writing
+mkdir -p ~/.config/opencode
+```
+
+This script installs OpenCode 1. OpenCode 2 has its own install script and partly different configuration keys; the configuration below is for OpenCode 1.
+
+`ollama launch opencode` cannot be used here: it belongs to the Ollama CLI on the host, and on this host Ollama runs in a container. OpenCode is therefore configured by hand.
+
+#### Step 2: Prepare the SearXNG MCP server
+
+OpenCode's built-in web search only works with OpenCode's own providers. The MCP server `mcp-searxng` exposes the local SearXNG instance as a search tool instead. It is started by OpenCode through `npx`, so Node.js is required:
+
+```bash
+sudo dnf install -y nodejs npm
+curl -s 'http://127.0.0.1:8112/search?q=test&format=json' | jq '.results | length'
+```
+
+The `curl` test must print a number greater than 0. It only works because JSON output is enabled in `components/searxng/settings.yml`.
+
+`npx -y mcp-searxng` downloads the latest version from npm at every start and runs it with your user rights. To pin the version, install it once with `npm install -g mcp-searxng` and use `"command": ["mcp-searxng"]` in the configuration.
+
+#### Step 3: Configure OpenCode
+
+Create `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "ollama/qwen3-coder-128k:30b",
+  "small_model": "ollama/qwen3-coder-128k:30b",
+  "enabled_providers": ["ollama"],
+  "share": "disabled",
+  "autoupdate": "notify",
+  "compaction": { "auto": true, "prune": true, "reserved": 10000 },
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local)",
+      "options": { "baseURL": "http://127.0.0.1:11434/v1", "timeout": 600000 },
+      "models": {
+        "qwen3-coder-64k:30b":  { "name": "Qwen3 Coder 30B (64k)",  "limit": { "context": 65536,  "output": 8192 } },
+        "qwen3-64k:30b-a3b":    { "name": "Qwen3 30B (64k)",        "limit": { "context": 65536,  "output": 8192 } },
+        "gpt-oss-64k:20b":      { "name": "gpt-oss 20B (64k)",      "limit": { "context": 65536,  "output": 8192 } },
+        "gemma4-64k:12b":       { "name": "Gemma 4 12B (64k)",      "limit": { "context": 65536,  "output": 8192 } },
+        "qwen3-coder-128k:30b": { "name": "Qwen3 Coder 30B (128k)", "limit": { "context": 131072, "output": 8192 } },
+        "gpt-oss-128k:20b":     { "name": "gpt-oss 20B (128k)",     "limit": { "context": 131072, "output": 8192 } },
+        "gemma4-128k:12b":      { "name": "Gemma 4 12B (128k)",     "limit": { "context": 131072, "output": 8192 } }
+      }
+    }
+  },
+  "mcp": {
+    "searxng": {
+      "type": "local",
+      "command": ["npx", "-y", "mcp-searxng"],
+      "environment": { "SEARXNG_URL": "http://127.0.0.1:8112" },
+      "enabled": true
+    }
+  },
+  "agent": {
+    "plan": { "permission": { "edit": "deny", "bash": "ask" } }
+  },
+  "permission": {
+    "*": "ask",
+    "read": "allow",
+    "grep": "allow",
+    "glob": "allow",
+    "list": "allow",
+    "bash": {
+      "*": "ask",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "ls*": "allow",
+      "sudo*": "deny",
+      "su *": "deny",
+      "git push*": "deny",
+      "rm -rf*": "deny",
+      "podman update*": "deny",
+      "systemctl*": "deny",
+      "materia update*": "deny"
+    }
+  }
+}
+```
+
+| Key | Meaning on this host |
+| :--- | :--- |
+| `model` | Default model, written as `ollama/<variant>`. |
+| `small_model` | Model for small jobs such as session titles. It is the same as `model`, because Ollama keeps one model loaded (`OLLAMA_MAX_LOADED_MODELS=1`); a different model here would unload and reload the main model for every title. |
+| `enabled_providers` | Only the local provider is used, even if API keys for cloud providers exist. |
+| `share` | Sessions cannot be shared to an external service. |
+| `autoupdate` | `notify` reports a new version but does not install it. |
+| `compaction` | Summarises the session when the context is full; `prune` drops old tool output first. |
+| `provider.ollama.options.baseURL` | Ollama's OpenAI-compatible endpoint. The `/v1` suffix is required. |
+| `provider.ollama.options.timeout` | Ten minutes per request, to cover model loading and long answers. |
+| `models.<variant>.limit.context` | Tells OpenCode when to compact. **It must be equal to the `num_ctx` of the variant** (65536 or 131072). If it is higher, the window overflows in Ollama before OpenCode compacts, and tool calls fail silently. |
+| `models.<variant>.limit.output` | Maximum number of tokens per answer. |
+| `mcp.searxng` | Starts the SearXNG MCP server and passes it the address of the local instance. |
+| `agent.plan` | The Plan agent may not edit files. |
+| `permission` | Everything asks for approval, except reading and searching. The last matching `bash` pattern wins, so `*` comes first and the denied commands last. |
+
+Only list variants from 4.10 under `models`. A base model such as `gemma4:12b` runs with the 16k server default, so an entry for it with a larger `limit.context` is wrong.
+
+Check that no cloud provider is configured by accident:
+
+```bash
+opencode auth list
+```
+
+#### Step 4: First run
+
+```bash
+mkdir -p ~/projects && cd ~/projects
+git clone https://github.com/tedsluis/ollama-searxng-openwebui.git
+cd ollama-searxng-openwebui
+git switch -c opencode-test
+opencode
+```
+
+Start with a read-only request, for example: *"Explain what components/monitoring does and list the files it deploys."* While it runs, check in a second terminal that the right variant is loaded:
+
+```bash
+sudo podman exec ollama ollama ps
+```
+
+Expected: the variant name, `CONTEXT 65536` or `CONTEXT 131072`, and a GPU share as in 4.10. To test the web search, ask for something the model cannot know, such as the latest version of a tool; OpenCode then asks for permission to call the `searxng` tool.
+
+#### Daily use
+
+| Action | How |
+| :--- | :--- |
+| Start in a project | `opencode` in the project directory |
+| Continue the last session | `opencode --continue` |
+| Run one prompt without the TUI | `opencode run "..."` |
+| Switch between Plan (read-only) and Build | Tab |
+| Reference a file | `@path/to/file` |
+| Run a shell command yourself | `!command` |
+| Choose a model (64k or 128k variant) | `/models` |
+| Start a new session | `/new` |
+| Open an earlier session | `/sessions` |
+| Summarise the context | `/compact` |
+| Undo the last turn and its file changes | `/undo`, restore with `/redo` (needs a Git repository) |
+| Create project rules in `AGENTS.md` | `/init` |
+
+Guidelines for local models:
+
+* **Plan first, then build.** Let the Plan agent describe the change, then switch to Build with Tab.
+* **One small, concrete task per session,** and start a new session (`/new`) for every new task. A full context window is the most common cause of forgotten instructions and repeated work.
+* **Choose the context per task.** The 64k variants are faster and sufficient for small, scoped tasks. Use a 128k variant when the model has to read many files. Do not switch models in the middle of a task: every switch reloads the model, and Open WebUI waits in the meantime (`OLLAMA_NUM_PARALLEL=1`).
+* **Review every change** with `git diff`, validate with `sudo materia validate --hostname fedora`, then commit and push yourself.
+
+#### Troubleshooting
+
+| Symptom | Cause and fix |
+| :--- | :--- |
+| The model does not call tools, or answers with raw JSON | The context is too small or full. Check `CONTEXT` in `ollama ps`, check `limit.context`, and start a new session. |
+| Long pause before every answer | A model swap. Check that `small_model` equals `model`, and that Open WebUI is not using another model at the same time. |
+| OpenCode reports a configuration error at start | A key is not accepted by this OpenCode version. Remove `share`, `read`, `grep`, `glob` and `list` first and try again. |
+| The `searxng` tool is missing | Check `node --version`, the `curl` test from step 2, and that `mcp.searxng.enabled` is `true`. |
+| Everything is slow and `ollama ps` shows `100% CPU` | The GPU path is broken; see 4.7 and 4.8. |
+
+---
+
+### 4.12 Test results
 
 ```bash
 $ sudo ollama-diag status
