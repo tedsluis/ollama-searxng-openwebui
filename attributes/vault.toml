@@ -20,7 +20,7 @@ containerTag = "2026.11.2-d138f443b"
 
 [components.open-webui]
 # renovate: datasource=docker depName=ghcr.io/open-webui/open-webui versioning=semver
-containerTag = "v0.13.4"
+containerTag = "v0.13.5"
 dataPath = "/opt/open-webui"
 
 [components.renovate]
