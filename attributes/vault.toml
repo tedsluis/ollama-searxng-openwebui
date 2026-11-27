@@ -25,7 +25,7 @@ dataPath = "/opt/open-webui"
 
 [components.renovate]
 # renovate: datasource=docker depName=ghcr.io/renovatebot/renovate versioning=semver
-containerTag = "45.3.1"
+containerTag = "45.3.2"
 githubRepo = "tedsluis/ollama-searxng-openwebui"
 
 [components.monitoring]
